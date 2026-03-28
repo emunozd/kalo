@@ -49,7 +49,7 @@ TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
     PERFIL_ESTATURA,
     PERFIL_PESO,
     PERFIL_SEXO,
-    PERFIL_EDAD,
+    PERFIL_NACIMIENTO,
     PERFIL_FACTOR,
     CALORIA_DESC,
     CALORIA_KCAL,
@@ -273,19 +273,32 @@ async def perfil_sexo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return PERFIL_SEXO
 
     context.user_data["perfil_sexo"] = sexo
-    await update.message.reply_text("🎂 ¿Cuál es tu *edad* en años?", parse_mode=ParseMode.MARKDOWN, reply_markup=ReplyKeyboardRemove())
-    return PERFIL_EDAD
+    await update.message.reply_text(
+        "🎂 ¿Cuál es tu fecha de nacimiento?\n\nFormato: *DD/MM/AAAA* (ej: 15/04/1990)",
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    return PERFIL_NACIMIENTO
 
 
-async def perfil_edad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def perfil_nacimiento(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from datetime import datetime, date
+    texto = update.message.text.strip()
     try:
-        edad = int(update.message.text.strip())
-        assert 5 <= edad <= 120
+        fn = datetime.strptime(texto, "%d/%m/%Y").date()
+        # Validar rango razonable
+        hoy = date.today()
+        edad = hoy.year - fn.year - ((hoy.month, hoy.day) < (fn.month, fn.day))
+        assert 5 <= edad <= 120, "Edad fuera de rango"
+        assert fn < hoy, "Fecha futura"
     except (ValueError, AssertionError):
-        await update.message.reply_text("⚠️ Ingresa una edad válida entre 5 y 120 años.")
-        return PERFIL_EDAD
+        await update.message.reply_text(
+            "⚠️ Fecha inválida. Usa el formato *DD/MM/AAAA* (ej: 15/04/1990)",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return PERFIL_NACIMIENTO
 
-    context.user_data["perfil_edad"] = edad
+    context.user_data["perfil_nacimiento"] = fn.isoformat()
     keyboard = [["1.2 — Sedentario", "1.375 — Ligero"], ["1.55 — Moderado", "1.725 — Activo"], ["1.9 — Muy activo"]]
     await update.message.reply_text(
         "🏃 ¿Cuál es tu nivel de actividad física?\n\n"
@@ -324,7 +337,7 @@ async def perfil_factor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "estatura_cm": context.user_data["perfil_estatura"],
         "peso_kg": context.user_data["perfil_peso"],
         "sexo": context.user_data["perfil_sexo"],
-        "edad": context.user_data["perfil_edad"],
+        "fecha_nacimiento": context.user_data["perfil_nacimiento"],
         "factor_actividad": factor,
     }
 
@@ -836,11 +849,11 @@ def main():
             CommandHandler("perfil_actualizar", cmd_perfil_actualizar),
         ],
         states={
-            PERFIL_ESTATURA: [MessageHandler(filters.TEXT & ~filters.COMMAND, perfil_estatura)],
-            PERFIL_PESO:     [MessageHandler(filters.TEXT & ~filters.COMMAND, perfil_peso)],
-            PERFIL_SEXO:     [MessageHandler(filters.TEXT & ~filters.COMMAND, perfil_sexo)],
-            PERFIL_EDAD:     [MessageHandler(filters.TEXT & ~filters.COMMAND, perfil_edad)],
-            PERFIL_FACTOR:   [MessageHandler(filters.TEXT & ~filters.COMMAND, perfil_factor)],
+            PERFIL_ESTATURA:   [MessageHandler(filters.TEXT & ~filters.COMMAND, perfil_estatura)],
+            PERFIL_PESO:       [MessageHandler(filters.TEXT & ~filters.COMMAND, perfil_peso)],
+            PERFIL_SEXO:       [MessageHandler(filters.TEXT & ~filters.COMMAND, perfil_sexo)],
+            PERFIL_NACIMIENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, perfil_nacimiento)],
+            PERFIL_FACTOR:     [MessageHandler(filters.TEXT & ~filters.COMMAND, perfil_factor)],
         },
         fallbacks=[CommandHandler("cancelar", cancelar)],
     )

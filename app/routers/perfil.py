@@ -39,11 +39,11 @@ async def crear_o_actualizar_perfil(
         perfil = Perfil(usuario_id=usuario.id)
         db.add(perfil)
 
-    perfil.estatura_cm     = body.estatura_cm
-    perfil.peso_kg         = body.peso_kg
-    perfil.sexo            = SexoTipo(body.sexo)
-    perfil.edad            = body.edad
-    perfil.factor_actividad = body.factor_actividad
+    perfil.estatura_cm       = body.estatura_cm
+    perfil.peso_kg           = body.peso_kg
+    perfil.sexo              = SexoTipo(body.sexo)
+    perfil.fecha_nacimiento  = body.fecha_nacimiento
+    perfil.factor_actividad  = body.factor_actividad
 
     # Calcular BMR con Harris-Benedict revisado
     perfil.bmr           = perfil.calcular_bmr()

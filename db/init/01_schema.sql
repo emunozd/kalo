@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS perfiles (
     estatura_cm         INTEGER     NOT NULL CHECK (estatura_cm BETWEEN 50 AND 300),
     peso_kg             NUMERIC(5,2) NOT NULL CHECK (peso_kg BETWEEN 20 AND 500),
     sexo                sexo_tipo   NOT NULL,
-    edad                INTEGER     NOT NULL CHECK (edad BETWEEN 5 AND 120),
+    fecha_nacimiento    DATE        NOT NULL CHECK (fecha_nacimiento < CURRENT_DATE),
     bmr                 NUMERIC(8,2) NOT NULL,          -- kcal/día en reposo calculadas
     factor_actividad    NUMERIC(4,2) NOT NULL DEFAULT 1.2, -- sedentario por defecto
     objetivo_kcal       NUMERIC(8,2) NOT NULL,          -- bmr × factor

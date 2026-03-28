@@ -67,29 +67,36 @@ class Perfil(Base):
 
     id:               Mapped[UUID]          = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     usuario_id:       Mapped[UUID]          = mapped_column(PGUUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, unique=True)
-    estatura_cm:      Mapped[int]           = mapped_column(Integer, nullable=False)
-    peso_kg:          Mapped[Decimal]       = mapped_column(Numeric(5, 2), nullable=False)
-    sexo:             Mapped[SexoTipo]      = mapped_column(Enum(SexoTipo, name="sexo_tipo"), nullable=False)
-    edad:             Mapped[int]           = mapped_column(Integer, nullable=False)
-    bmr:              Mapped[Decimal]       = mapped_column(Numeric(8, 2), nullable=False)
-    factor_actividad: Mapped[Decimal]       = mapped_column(Numeric(4, 2), nullable=False, default=Decimal("1.2"))
-    objetivo_kcal:    Mapped[Decimal]       = mapped_column(Numeric(8, 2), nullable=False)
-    creado_en:        Mapped[datetime]      = mapped_column(DateTime(timezone=True), server_default=func.now())
-    actualizado_en:   Mapped[datetime]      = mapped_column(DateTime(timezone=True), server_default=func.now())
+    estatura_cm:        Mapped[int]           = mapped_column(Integer, nullable=False)
+    peso_kg:            Mapped[Decimal]       = mapped_column(Numeric(5, 2), nullable=False)
+    sexo:               Mapped[SexoTipo]      = mapped_column(Enum(SexoTipo, name="sexo_tipo"), nullable=False)
+    fecha_nacimiento:   Mapped[date]          = mapped_column(Date, nullable=False)
+    bmr:                Mapped[Decimal]       = mapped_column(Numeric(8, 2), nullable=False)
+    factor_actividad:   Mapped[Decimal]       = mapped_column(Numeric(4, 2), nullable=False, default=Decimal("1.2"))
+    objetivo_kcal:      Mapped[Decimal]       = mapped_column(Numeric(8, 2), nullable=False)
+    creado_en:          Mapped[datetime]      = mapped_column(DateTime(timezone=True), server_default=func.now())
+    actualizado_en:     Mapped[datetime]      = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     usuario: Mapped["Usuario"] = relationship(back_populates="perfil")
 
     __table_args__ = (
         CheckConstraint("estatura_cm BETWEEN 50 AND 300", name="ck_estatura"),
         CheckConstraint("peso_kg BETWEEN 20 AND 500",     name="ck_peso"),
-        CheckConstraint("edad BETWEEN 5 AND 120",         name="ck_edad"),
     )
 
+    def edad(self) -> int:
+        """Calcula la edad actual a partir de fecha_nacimiento."""
+        hoy = date.today()
+        anios = hoy.year - self.fecha_nacimiento.year
+        if (hoy.month, hoy.day) < (self.fecha_nacimiento.month, self.fecha_nacimiento.day):
+            anios -= 1
+        return anios
+
     def calcular_bmr(self) -> Decimal:
-        """Harris-Benedict revisado."""
+        """Harris-Benedict revisado usando edad calculada desde fecha_nacimiento."""
         kg  = float(self.peso_kg)
         cm  = float(self.estatura_cm)
-        age = float(self.edad)
+        age = float(self.edad())
         if self.sexo == SexoTipo.M:
             bmr = 88.362 + (13.397 * kg) + (4.799 * cm) - (5.677 * age)
         else:

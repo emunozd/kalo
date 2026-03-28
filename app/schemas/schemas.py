@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 # ── Auth ─────────────────────────────────────────────────────
@@ -34,7 +34,7 @@ class PerfilIn(BaseModel):
     estatura_cm: int = Field(ge=50, le=300)
     peso_kg: Decimal = Field(ge=20, le=500)
     sexo: str = Field(pattern="^(M|F|OTRO)$")
-    edad: int = Field(ge=5, le=120)
+    fecha_nacimiento: date
     factor_actividad: Decimal = Field(default=Decimal("1.2"), ge=1.0, le=2.5)
 
 
@@ -43,13 +43,24 @@ class PerfilOut(BaseModel):
     estatura_cm: int
     peso_kg: Decimal
     sexo: str
-    edad: int
+    fecha_nacimiento: date
+    edad: int = 0
     bmr: Decimal
     factor_actividad: Decimal
     objetivo_kcal: Decimal
     actualizado_en: datetime
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def calcular_edad(self) -> "PerfilOut":
+        hoy = date.today()
+        fn = self.fecha_nacimiento
+        anios = hoy.year - fn.year
+        if (hoy.month, hoy.day) < (fn.month, fn.day):
+            anios -= 1
+        self.edad = anios
+        return self
 
 
 # ── Calorías ─────────────────────────────────────────────────
