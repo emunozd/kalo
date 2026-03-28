@@ -84,7 +84,7 @@ class Perfil(Base):
         CheckConstraint("peso_kg BETWEEN 20 AND 500",     name="ck_peso"),
     )
 
-    def edad(self) -> int:
+    def calcular_edad(self) -> int:
         """Calcula la edad actual a partir de fecha_nacimiento."""
         hoy = date.today()
         anios = hoy.year - self.fecha_nacimiento.year
@@ -96,7 +96,7 @@ class Perfil(Base):
         """Harris-Benedict revisado usando edad calculada desde fecha_nacimiento."""
         kg  = float(self.peso_kg)
         cm  = float(self.estatura_cm)
-        age = float(self.edad())
+        age = float(self.calcular_edad())
         if self.sexo == SexoTipo.M:
             bmr = 88.362 + (13.397 * kg) + (4.799 * cm) - (5.677 * age)
         else:
