@@ -829,10 +829,25 @@ async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── Entrypoint ───────────────────────────────────────────────
 
-def main():
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
+async def post_init(app: Application) -> None:
+    """Registra los comandos en Telegram para que aparezcan en el menú."""
+    from telegram import BotCommand
+    await app.bot.set_my_commands([
+        BotCommand("start",       "Bienvenida y lista de comandos"),
+        BotCommand("vincular",    "Vincular cuenta KALO con email"),
+        BotCommand("perfil",      "Ver o actualizar tu BMR"),
+        BotCommand("calorias",    "Registrar una comida"),
+        BotCommand("ejercicio",   "Registrar actividad física"),
+        BotCommand("resumen",     "Balance calórico de hoy"),
+        BotCommand("historial",   "Últimos 7 días"),
+        BotCommand("borrar",      "Eliminar un registro"),
+        BotCommand("desvincular", "Desvincular Telegram"),
+        BotCommand("cancelar",    "Cancelar operación en curso"),
+    ])
 
-    # Conversación: vincular cuenta
+
+def main():
+    app = Application.builder().token(TELEGRAM_TOKEN).post_init(post_init).build()
     conv_vincular = ConversationHandler(
         entry_points=[CommandHandler("vincular", cmd_vincular)],
         states={
