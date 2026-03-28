@@ -213,10 +213,12 @@ async def cmd_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
         mantenim = float(p.get("kcal_mantenimiento") or p["objetivo_kcal"])
         objetivo = float(p["objetivo_kcal"])
 
-        if diff > 2:
+        if diff < -2:
+            # diferencia negativa = peso_ideal - peso_actual < 0 = sobrepeso
             estado_peso = f"⬇️ Estás *{abs(diff):.1f} kg* por encima de tu peso saludable"
             meta_txt = f"🎯 Objetivo para *bajar peso*: *{objetivo:.0f} kcal/día* (-500 déficit)\n📌 Mantenimiento: {mantenim:.0f} kcal/día"
-        elif diff < -2:
+        elif diff > 2:
+            # diferencia positiva = peso_ideal - peso_actual > 0 = bajo peso
             estado_peso = f"⬆️ Te faltan *{abs(diff):.1f} kg* para tu peso saludable"
             meta_txt = f"🎯 Objetivo para *ganar peso*: *{objetivo:.0f} kcal/día* (+300 superávit)\n📌 Mantenimiento: {mantenim:.0f} kcal/día"
         else:
