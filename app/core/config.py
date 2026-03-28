@@ -15,10 +15,9 @@ class Settings(BaseSettings):
     brevo_from_email: str
     brevo_from_name: str = "KALO"
 
-    # LLM Vision
-    llm_vision_url: str
-    llm_vision_api_key: str = ""
-    llm_vision_model: str = "gpt-4o"
+    # LLM / AIBase
+    llm_base_url: str
+    llm_api_key: str = ""
 
     # Telegram — opcional en la API, requerido solo en el bot
     telegram_token: str = ""

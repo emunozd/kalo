@@ -49,9 +49,8 @@ services:
       BREVO_API_KEY: ${BREVO_API_KEY}
       BREVO_FROM_EMAIL: ${BREVO_FROM_EMAIL}
       BREVO_FROM_NAME: ${BREVO_FROM_NAME:-KALO}
-      LLM_VISION_URL: ${LLM_VISION_URL}
-      LLM_VISION_API_KEY: ${LLM_VISION_API_KEY:-}
-      LLM_VISION_MODEL: ${LLM_VISION_MODEL:-gpt-4o}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_API_KEY: ${LLM_API_KEY:-}
       TZ: America/Bogota
     ports:
       - "${API_PORT:-8000}:8000"
