@@ -1,13 +1,15 @@
 import base64
 import json
+import logging
 import re
 from decimal import Decimal
-from pathlib import Path
 
 import httpx
 
 from app.core.config import settings
 from app.schemas.schemas import FotoAnalisisOut
+
+log = logging.getLogger(__name__)
 
 
 SYSTEM_PROMPT = """Eres un nutricionista experto en análisis calórico de alimentos.
@@ -64,8 +66,11 @@ async def analizar_foto_comida(imagen_bytes: bytes, mime_type: str = "image/jpeg
     if settings.llm_vision_api_key:
         headers["Authorization"] = f"Bearer {settings.llm_vision_api_key}"
 
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(settings.llm_vision_url, json=payload, headers=headers)
+        log.info("LLM Vision status: %s", resp.status_code)
+        if resp.status_code != 200:
+            log.error("LLM Vision error body: %s", resp.text[:500])
         resp.raise_for_status()
 
     data = resp.json()
