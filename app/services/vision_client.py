@@ -20,8 +20,8 @@ async def analizar_foto_comida(imagen_bytes: bytes, mime_type: str = "image/jpeg
     imagen_b64 = base64.b64encode(imagen_bytes).decode("utf-8")
 
     headers = {"Content-Type": "application/json"}
-    if settings.llm_vision_api_key:
-        headers["Authorization"] = f"Bearer {settings.llm_vision_api_key}"
+    if settings.llm_api_key:
+        headers["Authorization"] = f"Bearer {settings.llm_api_key}"
 
     payload = {"imagen_b64": imagen_b64}
 
