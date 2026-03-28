@@ -632,7 +632,7 @@ async def handle_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
             content=bytes(foto_bytes),
             headers={
                 **_auth_headers(token),
-                "Content-Type": imagen.mime_type or "image/jpeg",
+                "Content-Type": "image/jpeg",
             },
         )
 
