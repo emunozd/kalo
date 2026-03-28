@@ -45,9 +45,30 @@ async def crear_o_actualizar_perfil(
     perfil.fecha_nacimiento  = body.fecha_nacimiento
     perfil.factor_actividad  = body.factor_actividad
 
-    # Calcular BMR con Harris-Benedict revisado
     perfil.bmr           = perfil.calcular_bmr()
-    perfil.objetivo_kcal = round(perfil.bmr * body.factor_actividad, 2)
+    mantenimiento        = float(perfil.bmr) * float(body.factor_actividad)
+
+    # Peso saludable con IMC 22
+    estatura_m   = body.estatura_cm / 100
+    peso_ideal   = 22 * estatura_m ** 2
+    diferencia   = float(body.peso_kg) - peso_ideal  # positivo = sobrepeso
+
+    # Ajuste calórico orientado al peso saludable
+    DEFICIT      = 500   # kcal/día para bajar ~0.5 kg/semana
+    SUPERAVIT    = 300   # kcal/día para subir masa magra
+    MARGEN_KG    = 2.0   # rango donde se considera "en peso"
+
+    if diferencia > MARGEN_KG:
+        # Sobrepeso — déficit moderado, nunca bajar del BMR
+        objetivo = max(mantenimiento - DEFICIT, float(perfil.bmr))
+    elif diferencia < -MARGEN_KG:
+        # Bajo peso — superávit moderado
+        objetivo = mantenimiento + SUPERAVIT
+    else:
+        # En peso saludable — mantenimiento
+        objetivo = mantenimiento
+
+    perfil.objetivo_kcal = Decimal(str(round(objetivo, 0)))
 
     await db.commit()
     await db.refresh(perfil)

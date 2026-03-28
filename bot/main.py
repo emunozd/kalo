@@ -210,21 +210,27 @@ async def cmd_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if r.status_code == 200:
         p = r.json()
         diff = float(p.get("diferencia_peso_kg", 0))
-        if diff > 0.5:
-            estado_peso = f"⬆️ Te faltan *{diff:.1f} kg* para llegar a tu peso saludable"
-        elif diff < -0.5:
+        mantenim = float(p.get("kcal_mantenimiento") or p["objetivo_kcal"])
+        objetivo = float(p["objetivo_kcal"])
+
+        if diff > 2:
             estado_peso = f"⬇️ Estás *{abs(diff):.1f} kg* por encima de tu peso saludable"
+            meta_txt = f"🎯 Objetivo para *bajar peso*: *{objetivo:.0f} kcal/día* (-500 déficit)\n📌 Mantenimiento: {mantenim:.0f} kcal/día"
+        elif diff < -2:
+            estado_peso = f"⬆️ Te faltan *{abs(diff):.1f} kg* para tu peso saludable"
+            meta_txt = f"🎯 Objetivo para *ganar peso*: *{objetivo:.0f} kcal/día* (+300 superávit)\n📌 Mantenimiento: {mantenim:.0f} kcal/día"
         else:
             estado_peso = "✅ Estás en tu peso saludable"
+            meta_txt = f"🎯 Objetivo de mantenimiento: *{objetivo:.0f} kcal/día*"
 
         await update.message.reply_text(
             f"📊 *Tu perfil KALO*\n\n"
             f"📏 Estatura: {p['estatura_cm']} cm\n"
             f"⚖️ Peso actual: {float(p['peso_kg']):.1f} kg\n"
-            f"🎯 Peso saludable: *{float(p['peso_saludable_kg']):.1f} kg* (IMC 22)\n"
+            f"🏆 Peso saludable: *{float(p['peso_saludable_kg']):.1f} kg* (IMC 22)\n"
             f"{estado_peso}\n\n"
             f"🔥 BMR: *{float(p['bmr']):.0f} kcal/día* (en reposo)\n"
-            f"🏃 Objetivo diario: *{float(p['objetivo_kcal']):.0f} kcal/día*\n\n"
+            f"{meta_txt}\n\n"
             "¿Deseas actualizar tu perfil? /perfil\_actualizar",
             parse_mode=ParseMode.MARKDOWN,
         )

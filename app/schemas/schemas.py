@@ -48,8 +48,9 @@ class PerfilOut(BaseModel):
     bmr: Decimal
     factor_actividad: Decimal
     objetivo_kcal: Decimal
-    peso_saludable_kg: Optional[Decimal] = None   # IMC 22 × estatura²
-    diferencia_peso_kg: Optional[Decimal] = None  # positivo = subir, negativo = bajar
+    peso_saludable_kg: Optional[Decimal] = None
+    diferencia_peso_kg: Optional[Decimal] = None
+    kcal_mantenimiento: Optional[Decimal] = None  # referencia sin ajuste
     actualizado_en: datetime
 
     model_config = {"from_attributes": True}
@@ -67,8 +68,11 @@ class PerfilOut(BaseModel):
         # Peso saludable con IMC 22
         estatura_m = float(self.estatura_cm) / 100
         peso_ideal = round(22 * estatura_m ** 2, 1)
-        self.peso_saludable_kg = Decimal(str(peso_ideal))
+        self.peso_saludable_kg  = Decimal(str(peso_ideal))
         self.diferencia_peso_kg = Decimal(str(round(peso_ideal - float(self.peso_kg), 1)))
+
+        # Kcal de mantenimiento puro (sin ajuste de meta)
+        self.kcal_mantenimiento = Decimal(str(round(float(self.bmr) * float(self.factor_actividad), 0)))
 
         return self
 
