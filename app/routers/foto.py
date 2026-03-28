@@ -1,9 +1,7 @@
-import os
-import uuid
 from datetime import date
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,22 +23,26 @@ MAX_SIZE_MB = 10
 
 @router.post("/preview", response_model=FotoAnalisisOut)
 async def preview_foto(
-    imagen: UploadFile = File(...),
+    request: Request,
     usuario: Usuario = Depends(get_current_user),
 ):
     """
-    Analiza la foto con el LLM Vision y devuelve la estimación calórica.
-    No guarda nada en base de datos — el usuario confirma después con /foto/confirmar.
+    Recibe la imagen como body crudo (bytes) y devuelve la estimación calórica.
+    No guarda nada — el usuario confirma después con /foto/confirmar.
     """
-    if imagen.content_type not in ALLOWED_MIME:
+    content_type = request.headers.get("content-type", "image/jpeg")
+    if not content_type.startswith("image/"):
         raise HTTPException(status_code=415, detail="Formato no soportado. Usa JPEG, PNG o WEBP.")
 
-    imagen_bytes = await imagen.read()
+    imagen_bytes = await request.body()
     if len(imagen_bytes) > MAX_SIZE_MB * 1024 * 1024:
         raise HTTPException(status_code=413, detail=f"La imagen no debe superar {MAX_SIZE_MB}MB")
 
+    if not imagen_bytes:
+        raise HTTPException(status_code=400, detail="No se recibió imagen.")
+
     try:
-        analisis = await analizar_foto_comida(imagen_bytes, imagen.content_type)
+        analisis = await analizar_foto_comida(imagen_bytes, content_type)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Error al analizar la imagen: {str(e)}")
 

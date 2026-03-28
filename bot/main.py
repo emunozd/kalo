@@ -629,8 +629,11 @@ async def handle_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     async with httpx.AsyncClient(base_url=API_BASE, timeout=60) as c:
         r = await c.post(
             "/foto/preview",
-            files={"imagen": ("foto.jpg", bytes(foto_bytes), "image/jpeg")},
-            headers=_auth_headers(token),
+            content=bytes(foto_bytes),
+            headers={
+                **_auth_headers(token),
+                "Content-Type": imagen.mime_type or "image/jpeg",
+            },
         )
 
     if r.status_code != 200:
