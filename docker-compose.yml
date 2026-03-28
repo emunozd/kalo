@@ -80,7 +80,7 @@ services:
         condition: service_started
     environment:
       TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
-      API_BASE_URL: http://kalo-api:${API_PORT:-8000}
+      API_BASE_URL: http://kalo-api:8000
       TZ: America/Bogota
     networks:
       - kalo_net
