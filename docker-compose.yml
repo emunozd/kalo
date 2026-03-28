@@ -13,7 +13,7 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - kalo_pgdata:/var/lib/postgresql/data
+      - /var/lib/kalo/pgdata:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro
     networks:
       - kalo_net
@@ -96,7 +96,3 @@ services:
 networks:
   kalo_net:
     driver: bridge
-
-volumes:
-  kalo_pgdata:
-    external: true
