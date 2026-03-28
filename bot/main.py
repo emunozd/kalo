@@ -856,8 +856,8 @@ def main():
     conv_vincular = ConversationHandler(
         entry_points=[CommandHandler("vincular", cmd_vincular)],
         states={
-            VINCULAR_EMAIL:  [MessageHandler(filters.TEXT & ~filters.COMMAND, vincular_email)],
-            VINCULAR_CODIGO: [MessageHandler(filters.TEXT & ~filters.COMMAND, vincular_codigo)],
+            VINCULAR_EMAIL:  [MessageHandler(filters.TEXT & ~filters.COMMAND & ~CANCELAR_FILTER, vincular_email)],
+            VINCULAR_CODIGO: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~CANCELAR_FILTER, vincular_codigo)],
         },
         fallbacks=[
             CommandHandler("cancelar", cancelar),
@@ -872,11 +872,11 @@ def main():
             CommandHandler("perfil_actualizar", cmd_perfil_actualizar),
         ],
         states={
-            PERFIL_ESTATURA:   [MessageHandler(filters.TEXT & ~filters.COMMAND, perfil_estatura)],
-            PERFIL_PESO:       [MessageHandler(filters.TEXT & ~filters.COMMAND, perfil_peso)],
-            PERFIL_SEXO:       [MessageHandler(filters.TEXT & ~filters.COMMAND, perfil_sexo)],
-            PERFIL_NACIMIENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, perfil_nacimiento)],
-            PERFIL_FACTOR:     [MessageHandler(filters.TEXT & ~filters.COMMAND, perfil_factor)],
+            PERFIL_ESTATURA:   [MessageHandler(filters.TEXT & ~filters.COMMAND & ~CANCELAR_FILTER, perfil_estatura)],
+            PERFIL_PESO:       [MessageHandler(filters.TEXT & ~filters.COMMAND & ~CANCELAR_FILTER, perfil_peso)],
+            PERFIL_SEXO:       [MessageHandler(filters.TEXT & ~filters.COMMAND & ~CANCELAR_FILTER, perfil_sexo)],
+            PERFIL_NACIMIENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~CANCELAR_FILTER, perfil_nacimiento)],
+            PERFIL_FACTOR:     [MessageHandler(filters.TEXT & ~filters.COMMAND & ~CANCELAR_FILTER, perfil_factor)],
         },
         fallbacks=[
             CommandHandler("cancelar", cancelar),
@@ -888,9 +888,9 @@ def main():
     conv_caloria = ConversationHandler(
         entry_points=[CommandHandler("calorias", cmd_calorias)],
         states={
-            CALORIA_DESC:  [MessageHandler(filters.TEXT & ~filters.COMMAND, caloria_desc)],
-            CALORIA_KCAL:  [MessageHandler(filters.TEXT & ~filters.COMMAND, caloria_kcal)],
-            CALORIA_FECHA: [MessageHandler(filters.TEXT & ~filters.COMMAND, caloria_fecha)],
+            CALORIA_DESC:  [MessageHandler(filters.TEXT & ~filters.COMMAND & ~CANCELAR_FILTER, caloria_desc)],
+            CALORIA_KCAL:  [MessageHandler(filters.TEXT & ~filters.COMMAND & ~CANCELAR_FILTER, caloria_kcal)],
+            CALORIA_FECHA: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~CANCELAR_FILTER, caloria_fecha)],
         },
         fallbacks=[
             CommandHandler("cancelar", cancelar),
@@ -902,10 +902,10 @@ def main():
     conv_ejercicio = ConversationHandler(
         entry_points=[CommandHandler("ejercicio", cmd_ejercicio)],
         states={
-            EJERCICIO_DESC:  [MessageHandler(filters.TEXT & ~filters.COMMAND, ejercicio_desc)],
-            EJERCICIO_DUR:   [MessageHandler(filters.TEXT & ~filters.COMMAND, ejercicio_dur)],
-            EJERCICIO_KCAL:  [MessageHandler(filters.TEXT & ~filters.COMMAND, ejercicio_kcal)],
-            EJERCICIO_FECHA: [MessageHandler(filters.TEXT & ~filters.COMMAND, ejercicio_fecha)],
+            EJERCICIO_DESC:  [MessageHandler(filters.TEXT & ~filters.COMMAND & ~CANCELAR_FILTER, ejercicio_desc)],
+            EJERCICIO_DUR:   [MessageHandler(filters.TEXT & ~filters.COMMAND & ~CANCELAR_FILTER, ejercicio_dur)],
+            EJERCICIO_KCAL:  [MessageHandler(filters.TEXT & ~filters.COMMAND & ~CANCELAR_FILTER, ejercicio_kcal)],
+            EJERCICIO_FECHA: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~CANCELAR_FILTER, ejercicio_fecha)],
         },
         fallbacks=[
             CommandHandler("cancelar", cancelar),
