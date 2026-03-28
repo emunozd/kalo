@@ -42,7 +42,9 @@ log = logging.getLogger(__name__)
 API_BASE = os.environ["API_BASE_URL"]
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 
-# ── Estados de conversación ──────────────────────────────────
+CANCELAR_FILTER = filters.Regex(
+    r"^(\/cancelar|cancelar|salir|parar|para|stop|no|nada|olvida|olvídalo|déjalo)$"
+)
 (
     VINCULAR_EMAIL,
     VINCULAR_CODIGO,
@@ -857,7 +859,10 @@ def main():
             VINCULAR_EMAIL:  [MessageHandler(filters.TEXT & ~filters.COMMAND, vincular_email)],
             VINCULAR_CODIGO: [MessageHandler(filters.TEXT & ~filters.COMMAND, vincular_codigo)],
         },
-        fallbacks=[CommandHandler("cancelar", cancelar)],
+        fallbacks=[
+            CommandHandler("cancelar", cancelar),
+            MessageHandler(CANCELAR_FILTER, cancelar),
+        ],
     )
 
     # Conversación: registrar perfil
@@ -873,7 +878,10 @@ def main():
             PERFIL_NACIMIENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, perfil_nacimiento)],
             PERFIL_FACTOR:     [MessageHandler(filters.TEXT & ~filters.COMMAND, perfil_factor)],
         },
-        fallbacks=[CommandHandler("cancelar", cancelar)],
+        fallbacks=[
+            CommandHandler("cancelar", cancelar),
+            MessageHandler(CANCELAR_FILTER, cancelar),
+        ],
     )
 
     # Conversación: registrar caloría
@@ -884,7 +892,10 @@ def main():
             CALORIA_KCAL:  [MessageHandler(filters.TEXT & ~filters.COMMAND, caloria_kcal)],
             CALORIA_FECHA: [MessageHandler(filters.TEXT & ~filters.COMMAND, caloria_fecha)],
         },
-        fallbacks=[CommandHandler("cancelar", cancelar)],
+        fallbacks=[
+            CommandHandler("cancelar", cancelar),
+            MessageHandler(CANCELAR_FILTER, cancelar),
+        ],
     )
 
     # Conversación: registrar ejercicio
@@ -896,7 +907,10 @@ def main():
             EJERCICIO_KCAL:  [MessageHandler(filters.TEXT & ~filters.COMMAND, ejercicio_kcal)],
             EJERCICIO_FECHA: [MessageHandler(filters.TEXT & ~filters.COMMAND, ejercicio_fecha)],
         },
-        fallbacks=[CommandHandler("cancelar", cancelar)],
+        fallbacks=[
+            CommandHandler("cancelar", cancelar),
+            MessageHandler(CANCELAR_FILTER, cancelar),
+        ],
     )
 
     app.add_handler(conv_vincular)
