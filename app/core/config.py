@@ -20,8 +20,8 @@ class Settings(BaseSettings):
     llm_vision_api_key: str = ""
     llm_vision_model: str = "gpt-4o"
 
-    # Telegram
-    telegram_token: str
+    # Telegram — opcional en la API, requerido solo en el bot
+    telegram_token: str = ""
 
     class Config:
         env_file = ".env"
