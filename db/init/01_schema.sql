@@ -11,7 +11,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ── Enums ───────────────────────────────────────────────────
 CREATE TYPE fuente_caloria AS ENUM ('MANUAL', 'FOTO_LLM');
-CREATE TYPE sexo_tipo      AS ENUM ('M', 'F', 'OTRO');
+CREATE TYPE sexo_tipo AS ENUM ('M', 'F');
 
 -- ============================================================
 -- usuarios

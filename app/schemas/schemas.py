@@ -33,7 +33,7 @@ class TokenOut(BaseModel):
 class PerfilIn(BaseModel):
     estatura_cm: int = Field(ge=50, le=300)
     peso_kg: Decimal = Field(ge=20, le=500)
-    sexo: str = Field(pattern="^(M|F|OTRO)$")
+    sexo: str = Field(pattern="^(M|F)$")
     fecha_nacimiento: date
     factor_actividad: Decimal = Field(default=Decimal("1.2"), ge=1.0, le=2.5)
 
@@ -48,18 +48,28 @@ class PerfilOut(BaseModel):
     bmr: Decimal
     factor_actividad: Decimal
     objetivo_kcal: Decimal
+    peso_saludable_kg: Optional[Decimal] = None   # IMC 22 × estatura²
+    diferencia_peso_kg: Optional[Decimal] = None  # positivo = subir, negativo = bajar
     actualizado_en: datetime
 
     model_config = {"from_attributes": True}
 
     @model_validator(mode="after")
-    def calcular_edad(self) -> "PerfilOut":
+    def calcular_campos(self) -> "PerfilOut":
+        # Edad
         hoy = date.today()
         fn = self.fecha_nacimiento
         anios = hoy.year - fn.year
         if (hoy.month, hoy.day) < (fn.month, fn.day):
             anios -= 1
         self.edad = anios
+
+        # Peso saludable con IMC 22
+        estatura_m = float(self.estatura_cm) / 100
+        peso_ideal = round(22 * estatura_m ** 2, 1)
+        self.peso_saludable_kg = Decimal(str(peso_ideal))
+        self.diferencia_peso_kg = Decimal(str(round(peso_ideal - float(self.peso_kg), 1)))
+
         return self
 
 
@@ -131,10 +141,8 @@ class ResumenDiarioOut(BaseModel):
     kcal_quemadas: Decimal
     kcal_objetivo: Decimal
     kcal_disponibles: Optional[Decimal]
-    primera_entrada_en: datetime
-    actualizado_en: datetime
-
-    # Campos calculados para el bot
+    primera_entrada_en: Optional[datetime] = None
+    actualizado_en: Optional[datetime] = None
     porcentaje_usado: Optional[Decimal] = None
     mensaje_orientacion: Optional[str] = None
 

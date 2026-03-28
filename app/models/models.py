@@ -22,9 +22,8 @@ class FuenteCaloria(str, enum.Enum):
 
 
 class SexoTipo(str, enum.Enum):
-    M    = "M"
-    F    = "F"
-    OTRO = "OTRO"
+    M = "M"
+    F = "F"
 
 
 # ── Modelos ──────────────────────────────────────────────────

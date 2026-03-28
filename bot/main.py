@@ -209,13 +209,23 @@ async def cmd_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     r = await _api("get", "/perfil", token)
     if r.status_code == 200:
         p = r.json()
+        diff = float(p.get("diferencia_peso_kg", 0))
+        if diff > 0.5:
+            estado_peso = f"⬆️ Te faltan *{diff:.1f} kg* para llegar a tu peso saludable"
+        elif diff < -0.5:
+            estado_peso = f"⬇️ Estás *{abs(diff):.1f} kg* por encima de tu peso saludable"
+        else:
+            estado_peso = "✅ Estás en tu peso saludable"
+
         await update.message.reply_text(
             f"📊 *Tu perfil KALO*\n\n"
             f"📏 Estatura: {p['estatura_cm']} cm\n"
-            f"⚖️ Peso: {p['peso_kg']} kg\n"
-            f"🔥 BMR: *{float(p['bmr']):.0f} kcal/día*\n"
-            f"🎯 Objetivo: *{float(p['objetivo_kcal']):.0f} kcal/día*\n\n"
-            "¿Deseas actualizar tu perfil? /perfil\\_actualizar",
+            f"⚖️ Peso actual: {float(p['peso_kg']):.1f} kg\n"
+            f"🎯 Peso saludable: *{float(p['peso_saludable_kg']):.1f} kg* (IMC 22)\n"
+            f"{estado_peso}\n\n"
+            f"🔥 BMR: *{float(p['bmr']):.0f} kcal/día* (en reposo)\n"
+            f"🏃 Objetivo diario: *{float(p['objetivo_kcal']):.0f} kcal/día*\n\n"
+            "¿Deseas actualizar tu perfil? /perfil\_actualizar",
             parse_mode=ParseMode.MARKDOWN,
         )
         return
@@ -259,7 +269,7 @@ async def perfil_peso(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return PERFIL_PESO
 
     context.user_data["perfil_peso"] = kg
-    keyboard = [["Masculino", "Femenino", "Otro"]]
+    keyboard = [["Masculino", "Femenino"]]
     await update.message.reply_text(
         "👤 ¿Cuál es tu sexo biológico? (para el cálculo de BMR)",
         reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True),
@@ -268,7 +278,7 @@ async def perfil_peso(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def perfil_sexo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    sexo_map = {"masculino": "M", "femenino": "F", "otro": "OTRO"}
+    sexo_map = {"masculino": "M", "femenino": "F"}
     sexo = sexo_map.get(update.message.text.strip().lower())
     if not sexo:
         await update.message.reply_text("⚠️ Selecciona una opción válida.")
@@ -360,6 +370,29 @@ async def perfil_factor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
+def _formato_resumen_inline(s: dict) -> str:
+    """Genera texto de resumen con mapa de calor para mostrar tras registrar."""
+    consumidas  = float(s.get("kcal_consumidas", 0))
+    objetivo    = float(s.get("kcal_objetivo", 1))
+    disponibles = float(s.get("kcal_disponibles") or objetivo)
+    pct = (consumidas / objetivo * 100) if objetivo > 0 else 0
+    bloques = min(int(pct / 10), 10)
+
+    if pct < 50:      color = "🟦"
+    elif pct < 75:    color = "🟩"
+    elif pct < 90:    color = "🟨"
+    elif pct <= 100:  color = "🟧"
+    else:             color = "🟥"
+
+    barra = color * bloques + "⬜" * (10 - bloques)
+    extra = " ⚠️" if pct > 100 else ""
+    return (
+        f"\n\n{barra}{extra}  *{pct:.0f}%*\n"
+        f"📊 Disponibles: *{disponibles:.0f} kcal*\n"
+        f"{s.get('mensaje_orientacion', '')}"
+    )
+
+
 # ── /resumen ─────────────────────────────────────────────────
 
 async def cmd_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -373,13 +406,40 @@ async def cmd_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     s = r.json()
-    disp = float(s.get("kcal_disponibles") or 0)
+    consumidas  = float(s["kcal_consumidas"])
+    quemadas    = float(s["kcal_quemadas"])
+    objetivo    = float(s["kcal_objetivo"])
+    disponibles = float(s.get("kcal_disponibles") or objetivo)
+
+    # Porcentaje consumido respecto al objetivo
+    pct = (consumidas / objetivo * 100) if objetivo > 0 else 0
+
+    # Mapa de calor — barra de 10 bloques
+    bloques_llenos = min(int(pct / 10), 10)
+    bloques_extra  = max(int((pct - 100) / 10), 0)
+
+    if pct < 50:
+        color = "🟦"   # azul — muy por debajo
+    elif pct < 75:
+        color = "🟩"   # verde — bien
+    elif pct < 90:
+        color = "🟨"   # amarillo — acercándose
+    elif pct <= 100:
+        color = "🟧"   # naranja — casi en el límite
+    else:
+        color = "🟥"   # rojo — pasado el objetivo
+
+    barra = color * bloques_llenos + "⬜" * (10 - bloques_llenos)
+    if bloques_extra > 0:
+        barra += " ⚠️"
+
     await update.message.reply_text(
         f"📊 *Balance de hoy — {s['fecha']}*\n\n"
-        f"🎯 Objetivo: {float(s['kcal_objetivo']):.0f} kcal\n"
-        f"🍽️ Consumidas: {float(s['kcal_consumidas']):.0f} kcal\n"
-        f"🏃 Quemadas (ejercicio): {float(s['kcal_quemadas']):.0f} kcal\n"
-        f"✨ Disponibles: *{disp:.0f} kcal*\n\n"
+        f"{barra}  *{pct:.0f}%*\n\n"
+        f"🎯 Objetivo: {objetivo:.0f} kcal\n"
+        f"🍽️ Consumidas: {consumidas:.0f} kcal\n"
+        f"🏃 Quemadas (ejercicio): {quemadas:.0f} kcal\n"
+        f"✨ Disponibles: *{disponibles:.0f} kcal*\n\n"
         f"{s.get('mensaje_orientacion', '')}",
         parse_mode=ParseMode.MARKDOWN,
     )
@@ -446,13 +506,7 @@ async def caloria_fecha(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if r.status_code == 201:
         # Obtener resumen actualizado
         rs = await _api("get", f"/resumen/dia?fecha={fecha}", token)
-        resumen_txt = ""
-        if rs.status_code == 200:
-            s = rs.json()
-            resumen_txt = (
-                f"\n\n📊 *Balance del día:* {float(s.get('kcal_disponibles') or 0):.0f} kcal disponibles\n"
-                f"{s.get('mensaje_orientacion', '')}"
-            )
+        resumen_txt = _formato_resumen_inline(rs.json()) if rs.status_code == 200 else ""
 
         await update.message.reply_text(
             f"✅ Registrado: *{context.user_data['cal_desc']}* — {context.user_data['cal_kcal']:.0f} kcal{resumen_txt}",
@@ -539,12 +593,7 @@ async def ejercicio_fecha(update: Update, context: ContextTypes.DEFAULT_TYPE):
     r = await _api("post", "/ejercicio", token, json=payload)
     if r.status_code == 201:
         rs = await _api("get", f"/resumen/dia?fecha={fecha}", token)
-        resumen_txt = ""
-        if rs.status_code == 200:
-            s = rs.json()
-            resumen_txt = (
-                f"\n\n📊 *Balance del día:* {float(s.get('kcal_disponibles') or 0):.0f} kcal disponibles"
-            )
+        resumen_txt = _formato_resumen_inline(rs.json()) if rs.status_code == 200 else ""
 
         await update.message.reply_text(
             f"✅ Ejercicio registrado: *{context.user_data['eje_desc']}* — {context.user_data['eje_kcal']:.0f} kcal quemadas{resumen_txt}",
@@ -687,11 +736,7 @@ async def foto_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if r.status_code == 201:
             rs = await _api("get", f"/resumen/dia", token)
-            resumen_txt = ""
-            if rs.status_code == 200:
-                s = rs.json()
-                resumen_txt = f"\n\n📊 *Balance:* {float(s.get('kcal_disponibles') or 0):.0f} kcal disponibles\n{s.get('mensaje_orientacion', '')}"
-
+            resumen_txt = _formato_resumen_inline(rs.json()) if rs.status_code == 200 else ""
             await query.edit_message_text(
                 f"✅ Registrado: {kcal:.0f} kcal{resumen_txt}",
                 parse_mode=ParseMode.MARKDOWN,
