@@ -30,7 +30,7 @@ services:
           memory: 512M
         reservations:
           cpus: "0.25"
-          memory: 128M
+          memory: 256M
 
   kalo-api:
     build:
@@ -88,7 +88,7 @@ services:
       resources:
         limits:
           cpus: "0.50"
-          memory: 128M
+          memory: 256M
         reservations:
           cpus: "0.05"
           memory: 32M
