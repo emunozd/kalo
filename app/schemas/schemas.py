@@ -108,10 +108,14 @@ class RegistroCaloriaOut(BaseModel):
 # ── Foto → Calorías ──────────────────────────────────────────
 
 class FotoAnalisisOut(BaseModel):
+    tipo: str = "PLATO"            # PLATO o TABLA_NUTRICIONAL
     descripcion: str
     kcal_estimadas: Decimal
-    confianza: str          # ALTA / MEDIA / BAJA
-    detalle: Optional[str]  # desglose del LLM
+    confianza: str
+    detalle: Optional[str]
+    # Solo para TABLA_NUTRICIONAL
+    kcal_por_porcion: Optional[Decimal] = None
+    porcion_g: Optional[Decimal] = None
 
 
 class FotoConfirmarIn(BaseModel):

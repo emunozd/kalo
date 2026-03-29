@@ -40,8 +40,22 @@ async def analizar_foto_comida(imagen_bytes: bytes, mime_type: str = "image/jpeg
         raise
 
     data = resp.json()
+    tipo = data.get("tipo", "PLATO").upper()
+
+    if tipo == "TABLA_NUTRICIONAL":
+        kcal_porcion = Decimal(str(data.get("kcal_por_porcion", 0)))
+        return FotoAnalisisOut(
+            tipo="TABLA_NUTRICIONAL",
+            descripcion=data.get("producto") or "Tabla nutricional",
+            kcal_estimadas=kcal_porcion,  # por porción — el bot preguntará cuántas
+            confianza="ALTA",
+            detalle=data.get("detalle") or f"{kcal_porcion} kcal por porción",
+            kcal_por_porcion=kcal_porcion,
+            porcion_g=Decimal(str(data["porcion_g"])) if data.get("porcion_g") else None,
+        )
 
     return FotoAnalisisOut(
+        tipo="PLATO",
         descripcion=data["descripcion"],
         kcal_estimadas=Decimal(str(data["kcal_estimadas"])),
         confianza=data.get("confianza", "MEDIA"),

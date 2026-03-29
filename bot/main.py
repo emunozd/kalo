@@ -55,8 +55,7 @@ def _es_cancelar(texto: str) -> bool:
     ))
 
 def _hora_local(registrado_en: str) -> str:
-    """Toma HH:MM del timestamp ignorando cualquier offset — la hora en BD es la correcta."""
-    log.info("DEBUG registrado_en raw: %r", registrado_en)
+    """Toma HH:MM del timestamp — la API ya entrega en hora Bogotá."""
     try:
         s = registrado_en.replace("T", " ")
         return s[11:16]
@@ -833,12 +832,15 @@ async def handle_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ── Tabla nutricional detectada ───────────────────────────
     if tipo_foto == "TABLA_NUTRICIONAL":
-        kcal_porcion    = int(analisis.get("kcal_por_porcion", 0))
-        porcion_g       = analisis.get("porcion_g")
-        porciones_env   = analisis.get("porciones_por_envase")
-        producto        = analisis.get("producto") or "Producto"
+        kcal_porcion = float(analisis.get("kcal_por_porcion") or analisis.get("kcal_estimadas", 0))
+        porcion_g    = analisis.get("porcion_g")
+        producto     = analisis.get("descripcion") or "Producto"
 
-        context.user_data["foto_tabla"] = analisis
+        context.user_data["foto_tabla"] = {
+            "kcal_por_porcion": kcal_porcion,
+            "producto": producto,
+            "porcion_g": porcion_g,
+        }
 
         porcion_txt = f" ({porcion_g}g)" if porcion_g else ""
         env_txt     = f"\n📦 Porciones por envase: {porciones_env}" if porciones_env else ""
