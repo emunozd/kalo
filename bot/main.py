@@ -832,28 +832,36 @@ async def handle_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ── Tabla nutricional detectada ───────────────────────────
     if tipo_foto == "TABLA_NUTRICIONAL":
-        kcal_porcion = float(analisis.get("kcal_por_porcion") or analisis.get("kcal_estimadas", 0))
-        porcion_g    = analisis.get("porcion_g")
-        producto     = analisis.get("descripcion") or "Producto"
+        kcal_porcion  = float(analisis.get("kcal_por_porcion") or analisis.get("kcal_estimadas", 0))
+        porciones_env = float(analisis.get("porciones_por_envase") or 1)
+        porcion_g     = analisis.get("porcion_g")
+        producto      = analisis.get("descripcion") or "Producto"
+        kcal_total    = int(kcal_porcion * porciones_env)
 
-        context.user_data["foto_tabla"] = {
-            "kcal_por_porcion": kcal_porcion,
-            "producto": producto,
-            "porcion_g": porcion_g,
+        porcion_txt = f" ({porcion_g}g c/u)" if porcion_g else ""
+
+        # Usar la misma estructura que PLATO para foto_callback
+        context.user_data["foto_analisis"] = {
+            "descripcion":    producto,
+            "kcal_estimadas": kcal_total,
+            "confianza":      "ALTA",
         }
 
-        porcion_txt = f" ({porcion_g}g)" if porcion_g else ""
-        env_txt     = f"\n📦 Porciones por envase: {porciones_env}" if porciones_env else ""
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(f"✅ Confirmar {kcal_total} kcal", callback_data=f"foto_ok:{kcal_total}"),
+                InlineKeyboardButton("✏️ Ajustar", callback_data="foto_editar"),
+            ],
+            [InlineKeyboardButton("❌ Cancelar", callback_data="foto_cancelar")],
+        ])
 
         await update.message.reply_text(
-            f"🏷️ *Tabla nutricional detectada*\n\n"
-            f"📦 Producto: *{producto}*\n"
-            f"🔥 Calorías por porción{porcion_txt}: *{kcal_porcion} kcal*"
-            f"{env_txt}\n\n"
-            "¿*Cuántas porciones* consumiste? (ej: 1, 0.5, 2)",
+            f"🏷️ *Tabla nutricional — {producto}*\n\n"
+            f"📦 {porciones_env:.0f} porción(es){porcion_txt} × {kcal_porcion:.0f} kcal = *{kcal_total} kcal*\n\n"
+            "¿Confirmas el registro?",
             parse_mode=ParseMode.MARKDOWN,
+            reply_markup=keyboard,
         )
-        context.user_data["esperando_porciones_tabla"] = True
         return
 
     # ── Plato normal ──────────────────────────────────────────
