@@ -99,8 +99,10 @@ class RegistroCaloriaOut(BaseModel):
 
     @field_serializer("registrado_en")
     def serializar_registrado_en(self, v: datetime) -> str:
-        # Devolver la hora tal como está en BD, sin convertir a UTC
-        return v.strftime("%Y-%m-%dT%H:%M:%S")
+        from datetime import timedelta
+        # asyncpg entrega TIMESTAMPTZ en UTC — convertir a Bogotá (UTC-5)
+        bogota = v.replace(tzinfo=None) - timedelta(hours=5) if v.tzinfo else v
+        return bogota.strftime("%Y-%m-%dT%H:%M:%S")
 
 
 # ── Foto → Calorías ──────────────────────────────────────────
@@ -143,7 +145,9 @@ class RegistroEjercicioOut(BaseModel):
 
     @field_serializer("registrado_en")
     def serializar_registrado_en(self, v: datetime) -> str:
-        return v.strftime("%Y-%m-%dT%H:%M:%S")
+        from datetime import timedelta
+        bogota = v.replace(tzinfo=None) - timedelta(hours=5) if v.tzinfo else v
+        return bogota.strftime("%Y-%m-%dT%H:%M:%S")
 
 
 # ── Resumen diario ───────────────────────────────────────────
