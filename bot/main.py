@@ -57,13 +57,15 @@ def _es_cancelar(texto: str) -> bool:
 def _hora_local(registrado_en: str) -> str:
     """Extrae HH:MM del timestamp sin conversión — la BD ya guarda en hora Bogotá."""
     try:
-        # Formato: 2026-03-29T13:54:43.363970-05:00 o 2026-03-29 13:54:43.363970-05:00
         parte = registrado_en.replace("T", " ")
         return parte[11:16]
     except Exception:
         return registrado_en[11:16]
+
+CANCELAR_FILTER = filters.Regex(
     re.compile(r"^(\/cancelar|cancelar|salir|parar|para|stop|no|nada|olvida|olvídalo|déjalo)$", re.IGNORECASE)
 )
+
 (
     VINCULAR_EMAIL,
     VINCULAR_CODIGO,
