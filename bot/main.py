@@ -828,6 +828,7 @@ async def handle_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     analisis  = r.json()
+    log.info("FOTO analisis recibido: %s", analisis)
     tipo_foto = analisis.get("tipo", "PLATO").upper()
 
     # ── Tabla nutricional detectada ───────────────────────────
