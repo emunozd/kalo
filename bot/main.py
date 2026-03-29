@@ -1011,6 +1011,40 @@ async def handle_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     texto = update.message.text.strip()
+    # ── Detección local rápida antes de llamar al LLM ────────
+    texto_lower = texto.lower()
+
+    # Historial
+    if re.search(r"\b(historial|últimos|ultimos|registros|listar|mis comidas|mis ejercicios|qué comí|que comi|lo que llevo)\b", texto_lower):
+        await cmd_historial(update, context)
+        return
+
+    # Borrar registro por número — "borrar 2", "eliminar 3", "borra el 1", "2"
+    match_borrar = re.match(r"^(borrar?|eliminar?|borra|elimina|quita)[\s]+(\d+)$", texto_lower)
+    if not match_borrar:
+        match_borrar = re.match(r"^(\d+)$", texto_lower)  # solo el número
+    if match_borrar:
+        numero = int(match_borrar.group(2) if match_borrar.lastindex == 2 else match_borrar.group(1))
+        historial = context.user_data.get("historial", [])
+        if historial:
+            context.args = [str(numero)]
+            await cmd_borrar(update, context)
+        else:
+            await update.message.reply_text(
+                "Primero usa /historial para ver tus registros, luego escribe el número a borrar."
+            )
+        return
+
+    # Resumen / balance
+    if re.search(r"\b(resumen|balance|cómo voy|como voy|cuánto llevo|cuanto llevo|me quedan|disponibles)\b", texto_lower):
+        await cmd_resumen(update, context)
+        return
+
+    # Perfil
+    if re.search(r"\b(perfil|bmr|objetivo|meta calórica|meta calorica|peso saludable)\b", texto_lower):
+        await cmd_perfil(update, context)
+        return
+
     await update.message.reply_text("🤔 Analizando...")
 
     # ── Paso 1: clasificar intent ──────────────────────────────
@@ -1193,7 +1227,7 @@ async def post_init(app: Application) -> None:
         BotCommand("calorias",    "Registrar una comida"),
         BotCommand("ejercicio",   "Registrar actividad física"),
         BotCommand("resumen",     "Balance calórico de hoy"),
-        BotCommand("historial",   "Últimos 7 días"),
+        BotCommand("historial",   "Listar últimos 10 registros de comidas y entrenamientos"),
         BotCommand("borrar",      "Eliminar un registro"),
         BotCommand("desvincular", "Desvincular Telegram"),
         BotCommand("cancelar",    "Cancelar operación en curso"),
