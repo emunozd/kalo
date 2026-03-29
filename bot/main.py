@@ -55,12 +55,13 @@ def _es_cancelar(texto: str) -> bool:
     ))
 
 def _hora_local(registrado_en: str) -> str:
-    """Extrae HH:MM del timestamp sin conversión — la BD ya guarda en hora Bogotá."""
+    """Toma HH:MM del timestamp ignorando cualquier offset — la hora en BD es la correcta."""
+    log.info("DEBUG registrado_en raw: %r", registrado_en)
     try:
-        parte = registrado_en.replace("T", " ")
-        return parte[11:16]
+        s = registrado_en.replace("T", " ")
+        return s[11:16]
     except Exception:
-        return registrado_en[11:16]
+        return ""
 
 CANCELAR_FILTER = filters.Regex(
     re.compile(r"^(\/cancelar|cancelar|salir|parar|para|stop|no|nada|olvida|olvídalo|déjalo)$", re.IGNORECASE)
