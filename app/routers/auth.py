@@ -1,6 +1,12 @@
 import random
 import string
+import zoneinfo
 from datetime import datetime, timedelta, timezone
+
+TZ_BOGOTA = zoneinfo.ZoneInfo("America/Bogota")
+
+def _now() -> datetime:
+    return datetime.now(tz=TZ_BOGOTA)
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -43,7 +49,7 @@ async def solicitar_codigo(body: SolicitarCodigoIn, db: AsyncSession = Depends(g
     otp = CodigoOtp(
         usuario_id=usuario.id,
         codigo=codigo,
-        expira_en=datetime.now(timezone.utc) + timedelta(minutes=10),
+        expira_en=_now() + timedelta(minutes=10),
     )
     db.add(otp)
     await db.commit()
@@ -65,7 +71,7 @@ async def verificar_codigo(body: VerificarCodigoIn, db: AsyncSession = Depends(g
             Usuario.email == body.email,
             CodigoOtp.codigo == body.codigo,
             CodigoOtp.usado.is_(False),
-            CodigoOtp.expira_en > datetime.now(timezone.utc),
+            CodigoOtp.expira_en > _now(),
         )
     )
     otp = result.scalar_one_or_none()

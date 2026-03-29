@@ -24,8 +24,8 @@ CREATE TABLE IF NOT EXISTS usuarios (
     telegram_id         BIGINT      UNIQUE,
     telegram_username   TEXT,
     activo              BOOLEAN     NOT NULL DEFAULT TRUE,
-    creado_en           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    actualizado_en      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    creado_en           TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Bogota'),
+    actualizado_en      TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Bogota')
 );
 
 CREATE INDEX idx_usuarios_telegram_id ON usuarios(telegram_id) WHERE telegram_id IS NOT NULL;
@@ -39,9 +39,9 @@ CREATE TABLE IF NOT EXISTS codigos_otp (
     id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     usuario_id      UUID        NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
     codigo          TEXT        NOT NULL,
-    expira_en       TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '10 minutes'),
+    expira_en       TIMESTAMPTZ NOT NULL DEFAULT ((NOW() AT TIME ZONE 'America/Bogota') + INTERVAL '10 minutes'),
     usado           BOOLEAN     NOT NULL DEFAULT FALSE,
-    creado_en       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    creado_en       TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Bogota')
 );
 
 CREATE INDEX idx_otp_usuario ON codigos_otp(usuario_id);
@@ -66,8 +66,8 @@ CREATE TABLE IF NOT EXISTS perfiles (
     bmr                 NUMERIC(8,2) NOT NULL,          -- kcal/día en reposo calculadas
     factor_actividad    NUMERIC(4,2) NOT NULL DEFAULT 1.2, -- sedentario por defecto
     objetivo_kcal       NUMERIC(8,2) NOT NULL,          -- bmr × factor
-    creado_en           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    actualizado_en      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    creado_en           TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Bogota'),
+    actualizado_en      TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Bogota')
 );
 
 -- ============================================================
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS registros_calorias (
     id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     usuario_id      UUID         NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
     fecha           DATE         NOT NULL DEFAULT CURRENT_DATE,     -- día de consumo
-    registrado_en   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),            -- momento exacto del registro
+    registrado_en   TIMESTAMPTZ  NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Bogota'),            -- momento exacto del registro
     descripcion     TEXT         NOT NULL,
     kcal            NUMERIC(8,2) NOT NULL CHECK (kcal >= 0),
     fuente          fuente_caloria NOT NULL DEFAULT 'MANUAL',
@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS registros_ejercicio (
     id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     usuario_id      UUID         NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
     fecha           DATE         NOT NULL DEFAULT CURRENT_DATE,     -- día del ejercicio
-    registrado_en   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),            -- momento del registro
+    registrado_en   TIMESTAMPTZ  NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Bogota'),            -- momento del registro
     descripcion     TEXT         NOT NULL,
     duracion_min    INTEGER      CHECK (duracion_min > 0),          -- opcional
     kcal_quemadas   NUMERIC(8,2) NOT NULL CHECK (kcal_quemadas >= 0),
@@ -125,8 +125,8 @@ CREATE TABLE IF NOT EXISTS resumenes_diarios (
     kcal_objetivo       NUMERIC(8,2) NOT NULL DEFAULT 0,    -- snapshot del objetivo al día
     kcal_disponibles    NUMERIC(8,2)
         GENERATED ALWAYS AS (kcal_objetivo - kcal_consumidas + kcal_quemadas) STORED,
-    primera_entrada_en  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-    actualizado_en      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    primera_entrada_en  TIMESTAMPTZ  NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Bogota'),
+    actualizado_en      TIMESTAMPTZ  NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Bogota'),
 
     CONSTRAINT uq_resumen_usuario_fecha UNIQUE (usuario_id, fecha)
 );
@@ -139,7 +139,7 @@ CREATE INDEX idx_res_usuario_fecha ON resumenes_diarios(usuario_id, fecha DESC);
 CREATE OR REPLACE FUNCTION set_actualizado_en()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
-    NEW.actualizado_en = NOW();
+    NEW.actualizado_en = (NOW() AT TIME ZONE 'America/Bogota');
     RETURN NEW;
 END;
 $$;
@@ -184,11 +184,11 @@ BEGIN
     INSERT INTO resumenes_diarios
         (usuario_id, fecha, kcal_consumidas, kcal_quemadas, kcal_objetivo, primera_entrada_en, actualizado_en)
     VALUES
-        (p_usuario_id, p_fecha, v_consumidas, v_quemadas, p_objetivo_kcal, NOW(), NOW())
+        (p_usuario_id, p_fecha, v_consumidas, v_quemadas, p_objetivo_kcal, (NOW() AT TIME ZONE 'America/Bogota'), (NOW() AT TIME ZONE 'America/Bogota'))
     ON CONFLICT (usuario_id, fecha) DO UPDATE SET
         kcal_consumidas = EXCLUDED.kcal_consumidas,
         kcal_quemadas   = EXCLUDED.kcal_quemadas,
         kcal_objetivo   = EXCLUDED.kcal_objetivo,
-        actualizado_en  = NOW();
+        actualizado_en  = (NOW() AT TIME ZONE 'America/Bogota');
 END;
 $$;
