@@ -44,7 +44,8 @@ async def analizar_foto_comida(imagen_bytes: bytes, mime_type: str = "image/jpeg
 
     if tipo == "TABLA_NUTRICIONAL":
         kcal_porcion  = float(data.get("kcal_por_porcion", 0))
-        porciones_env = float(data.get("porciones_por_envase") or 1)
+        # AIBase devuelve porciones_consumidas (ya calculado desde porciones_por_envase)
+        porciones_env = float(data.get("porciones_consumidas") or data.get("porciones_por_envase") or 1)
         return FotoAnalisisOut(
             tipo="TABLA_NUTRICIONAL",
             descripcion=data.get("producto") or "Tabla nutricional",
