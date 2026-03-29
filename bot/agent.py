@@ -1,138 +1,106 @@
 """
-Clasificador de intent para el agente conversacional de KALO.
+agent.py — Cliente LLM para KALO bot.
 
-Intents soportados:
-  REGISTRAR_CALORIA  — "me comí una arepa con queso"
-  REGISTRAR_EJERCICIO — "hice 30 min de bicicleta y quemé 200 kcal"
-  VER_RESUMEN        — "cuántas calorías me quedan", "cómo voy hoy"
-  VER_HISTORIAL      — "qué comí ayer", "resumen de la semana"
-  BORRAR_REGISTRO    — "borra el último", "elimina el registro 2"
-  VER_PERFIL         — "cuál es mi BMR", "mi perfil"
-  ACTUALIZAR_PERFIL  — "cambié mi peso a 70kg"
-  AYUDA              — "qué puedes hacer", "help"
-  DESCONOCIDO        — cualquier otra cosa
+Reemplaza el clasificador regex por llamadas reales al LLM via AIBase.
 """
 
-import re
+import logging
 from dataclasses import dataclass
 from enum import Enum
+from typing import Optional
+
+import httpx
+
+log = logging.getLogger(__name__)
 
 
 class Intent(str, Enum):
-    REGISTRAR_CALORIA   = "REGISTRAR_CALORIA"
-    REGISTRAR_EJERCICIO = "REGISTRAR_EJERCICIO"
-    VER_RESUMEN         = "VER_RESUMEN"
-    VER_HISTORIAL       = "VER_HISTORIAL"
-    BORRAR_REGISTRO     = "BORRAR_REGISTRO"
-    VER_PERFIL          = "VER_PERFIL"
-    ACTUALIZAR_PERFIL   = "ACTUALIZAR_PERFIL"
-    AYUDA               = "AYUDA"
-    DESCONOCIDO         = "DESCONOCIDO"
+    COMIDA    = "COMIDA"
+    EJERCICIO = "EJERCICIO"
+    CONSULTA  = "CONSULTA"
+    OTRO      = "OTRO"
 
 
 @dataclass
 class IntentResult:
     intent: Intent
-    confianza: float          # 0.0 – 1.0
-    parametros: dict          # datos extraídos del texto
+    confianza: str = "MEDIA"
 
 
-# ── Patrones por intent ──────────────────────────────────────
-
-_PATRONES: list[tuple[Intent, list[str]]] = [
-    (Intent.REGISTRAR_EJERCICIO, [
-        r"\b(ejercit|corr|camin|biciclet|nadar|nataci|gym|gimnasio|entrena|yoga|cardio|pesas|quem)\w*",
-        r"\b(minutos?|min|horas?)\b.*(ejerc|activ|entrena)",
-        r"\b(kcal|calor[íi]as?)\b.*\b(quem|gast)\w+",
-        r"\b(quem[éeé]|gast[éeé])\b.*\b(kcal|calor[íi]as?)\b",
-    ]),
-    (Intent.REGISTRAR_CALORIA, [
-        r"\b(com[íi]|desayun[éeé]|almorcé|cen[éeé]|tom[éeé]|beb[íi]|trag[uú])\w*",
-        r"\b(comida|plato|almuerzo|desayuno|cena|snack|merienda|onces|picada)\b",
-        r"\b(arepa|arroz|pollo|carne|sopa|ensalada|fruta|jugo|café|pizza|hamburguesa|pasta)\b",
-        r"\b(\d+)\s*(kcal|calor[íi]as?)\b",
-    ]),
-    (Intent.VER_RESUMEN, [
-        r"\b(c[oó]mo voy|cu[aá]nto (llevo|he comido|me queda))\b",
-        r"\b(resumen|balance|estado)\b.*(hoy|d[íi]a|jornada)",
-        r"\b(kcal|calor[íi]as?).*(quedan?|disponibles?|restantes?)\b",
-        r"\bhoy\b.*(kcal|calor[íi]as?|comido|consumido)",
-    ]),
-    (Intent.VER_HISTORIAL, [
-        r"\b(ayer|semana|semanas?|mes|meses?|historial|registro|registros)\b",
-        r"\bqu[eé] com[íi]\b",
-        r"\b(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b",
-    ]),
-    (Intent.BORRAR_REGISTRO, [
-        r"\b(borra?|elimina?|quita?|bórr[ao]|elimin[ao])\b",
-        r"\b(último|[úu]ltimo|anterior|registro \d+|el \d+)\b.*\b(borra?|quita?)",
-    ]),
-    (Intent.ACTUALIZAR_PERFIL, [
-        r"\b(cambi[éeé]|actualiz[éeé]|mi nuevo peso|ahora peso|mido)\b",
-        r"\bpeso\b.*\b\d+\s*kg\b",
-        r"\b\d+\s*(kg|kilos?|centímetros?|cm|años?)\b.*(peso|mido|tengo)",
-    ]),
-    (Intent.VER_PERFIL, [
-        r"\b(bmr|metabolismo|perfil|objetivo calórico|meta)\b",
-        r"\bcu[aá]l es mi (peso|estatura|objetivo|meta)\b",
-    ]),
-    (Intent.AYUDA, [
-        r"\b(ayuda|help|qué puedes|comandos|opciones|cómo funciona)\b",
-        r"^/?(start|ayuda|help)$",
-    ]),
-]
+@dataclass
+class InferenciaComida:
+    descripcion: str
+    kcal: int
+    detalle: Optional[str] = None
+    confianza: str = "MEDIA"
+    nota: Optional[str] = None
 
 
-def clasificar(texto: str) -> IntentResult:
-    """
-    Clasifica el texto libre en un Intent.
-    Usa patrones regex ponderados — el intent con más matches gana.
-    Devuelve DESCONOCIDO si ninguno supera el umbral.
-    """
-    texto_lower = texto.lower().strip()
-    puntos: dict[Intent, int] = {}
-
-    for intent, patrones in _PATRONES:
-        for patron in patrones:
-            if re.search(patron, texto_lower):
-                puntos[intent] = puntos.get(intent, 0) + 1
-
-    if not puntos:
-        return IntentResult(intent=Intent.DESCONOCIDO, confianza=0.0, parametros={})
-
-    mejor_intent = max(puntos, key=puntos.__getitem__)
-    total_patrones = sum(len(p) for _, p in _PATRONES if _ == mejor_intent)
-    confianza = min(puntos[mejor_intent] / max(total_patrones, 1), 1.0)
-
-    # Extraer parámetros básicos del texto
-    parametros = _extraer_parametros(texto_lower, mejor_intent)
-
-    return IntentResult(intent=mejor_intent, confianza=confianza, parametros=parametros)
+@dataclass
+class InferenciaEjercicio:
+    descripcion: str
+    kcal_quemadas: int
+    duracion_min: Optional[int] = None
+    distancia_km: Optional[float] = None
+    confianza: str = "MEDIA"
+    nota: Optional[str] = None
 
 
-def _extraer_parametros(texto: str, intent: Intent) -> dict:
-    """Extrae datos numéricos y entidades clave del texto."""
-    params = {}
+class KaloLLMClient:
+    """Cliente HTTP hacia los endpoints /kalo/ de AIBase."""
 
-    # Extraer cantidad de kcal mencionadas
-    match_kcal = re.search(r"(\d+(?:[.,]\d+)?)\s*(kcal|calor[íi]as?)", texto)
-    if match_kcal:
-        params["kcal"] = float(match_kcal.group(1).replace(",", "."))
+    def __init__(self, base_url: str, api_key: str = ""):
+        self.base_url = base_url.rstrip("/")
+        self.headers = {"Content-Type": "application/json"}
+        if api_key:
+            self.headers["Authorization"] = f"Bearer {api_key}"
 
-    # Extraer duración en minutos
-    match_dur = re.search(r"(\d+)\s*(minutos?|min)", texto)
-    if match_dur:
-        params["duracion_min"] = int(match_dur.group(1))
+    async def clasificar_intent(self, texto: str) -> IntentResult:
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.post(
+                f"{self.base_url}/clasificar-intent",
+                json={"texto": texto},
+                headers=self.headers,
+            )
+            r.raise_for_status()
+            data = r.json()
+        try:
+            intent = Intent(data.get("intent", "OTRO").upper())
+        except ValueError:
+            intent = Intent.OTRO
+        return IntentResult(intent=intent, confianza=data.get("confianza", "MEDIA"))
 
-    # Extraer peso en kg
-    match_peso = re.search(r"(\d+(?:[.,]\d+)?)\s*kg", texto)
-    if match_peso:
-        params["peso_kg"] = float(match_peso.group(1).replace(",", "."))
+    async def inferir_comida(self, texto: str) -> InferenciaComida:
+        async with httpx.AsyncClient(timeout=60) as c:
+            r = await c.post(
+                f"{self.base_url}/inferir-comida",
+                json={"texto": texto},
+                headers=self.headers,
+            )
+            r.raise_for_status()
+            data = r.json()
+        return InferenciaComida(
+            descripcion=data.get("descripcion", texto),
+            kcal=int(data.get("kcal", 0)),
+            detalle=data.get("detalle"),
+            confianza=data.get("confianza", "MEDIA"),
+            nota=data.get("nota"),
+        )
 
-    # Extraer número de registro a borrar
-    if intent == Intent.BORRAR_REGISTRO:
-        match_num = re.search(r"\b(\d+)\b", texto)
-        if match_num:
-            params["numero"] = int(match_num.group(1))
-
-    return params
+    async def inferir_ejercicio(self, texto: str, peso_kg: float = 70.0, edad: int = 30) -> InferenciaEjercicio:
+        async with httpx.AsyncClient(timeout=60) as c:
+            r = await c.post(
+                f"{self.base_url}/inferir-ejercicio",
+                json={"texto": texto, "peso_kg": peso_kg, "edad": edad},
+                headers=self.headers,
+            )
+            r.raise_for_status()
+            data = r.json()
+        return InferenciaEjercicio(
+            descripcion=data.get("descripcion", texto),
+            kcal_quemadas=int(data.get("kcal_quemadas", 0)),
+            duracion_min=data.get("duracion_min"),
+            distancia_km=data.get("distancia_km"),
+            confianza=data.get("confianza", "MEDIA"),
+            nota=data.get("nota"),
+        )

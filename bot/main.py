@@ -16,9 +16,9 @@ Texto libre: el agente clasifica el intent y actúa.
 Foto: se analiza con LLM Vision y se pide confirmación.
 """
 
-import io
 import os
 import logging
+import re
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -34,16 +34,20 @@ from telegram.ext import (
     filters,
 )
 
-from bot.agent import Intent, clasificar
+from bot.agent import Intent, KaloLLMClient
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 log = logging.getLogger(__name__)
 
-API_BASE = os.environ["API_BASE_URL"]
+API_BASE       = os.environ["API_BASE_URL"]
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
+LLM_BASE_URL   = os.environ.get("LLM_BASE_URL", "")
+LLM_API_KEY    = os.environ.get("LLM_API_KEY", "")
+
+llm = KaloLLMClient(base_url=LLM_BASE_URL, api_key=LLM_API_KEY)
 
 CANCELAR_FILTER = filters.Regex(
-    r"^(\/cancelar|cancelar|salir|parar|para|stop|no|nada|olvida|olvídalo|déjalo)$"
+    re.compile(r"^(\/cancelar|cancelar|salir|parar|para|stop|no|nada|olvida|olvídalo|déjalo)$", re.IGNORECASE)
 )
 (
     VINCULAR_EMAIL,
@@ -679,9 +683,49 @@ async def handle_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not token:
         return
 
-    await update.message.reply_text("🔍 Analizando tu plato... un momento.")
+    # Si estamos esperando las porciones para una tabla nutricional
+    if context.user_data.get("esperando_porciones_tabla"):
+        context.user_data.pop("esperando_porciones_tabla")
+        try:
+            porciones = float(update.message.text.strip().replace(",", "."))
+            assert porciones > 0
+        except (ValueError, AssertionError):
+            await update.message.reply_text("⚠️ Ingresa un número válido de porciones (ej: 1, 0.5, 2).")
+            context.user_data["esperando_porciones_tabla"] = True
+            return
 
-    foto = update.message.photo[-1]  # Mayor resolución disponible
+        tabla = context.user_data.get("foto_tabla", {})
+        kcal_porcion = float(tabla.get("kcal_por_porcion", 0))
+        kcal_total   = int(kcal_porcion * porciones)
+        desc         = tabla.get("producto") or "Producto (tabla nutricional)"
+
+        context.user_data["foto_analisis"] = {
+            "descripcion":    desc,
+            "kcal_estimadas": kcal_total,
+            "confianza":      "ALTA",
+            "detalle":        f"{porciones} porción(es) × {int(kcal_porcion)} kcal",
+        }
+
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(f"✅ Confirmar {kcal_total} kcal", callback_data=f"foto_ok:{kcal_total}"),
+                InlineKeyboardButton("✏️ Ajustar", callback_data="foto_editar"),
+            ],
+            [InlineKeyboardButton("❌ Cancelar", callback_data="foto_cancelar")],
+        ])
+
+        await update.message.reply_text(
+            f"🏷️ *{desc}*\n\n"
+            f"📋 {porciones} porción(es) × {int(kcal_porcion)} kcal = *{kcal_total} kcal*\n\n"
+            "¿Confirmas el registro?",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=keyboard,
+        )
+        return
+
+    await update.message.reply_text("🔍 Analizando imagen... un momento.")
+
+    foto = update.message.photo[-1]
     tg_file = await foto.get_file()
     foto_bytes = await tg_file.download_as_bytearray()
 
@@ -699,11 +743,37 @@ async def handle_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ No pude analizar la foto. Intenta de nuevo o regístralo manualmente.")
         return
 
-    analisis = r.json()
-    kcal = float(analisis["kcal_estimadas"])
-    desc = analisis["descripcion"]
-    confianza = analisis["confianza"]
-    detalle = analisis.get("detalle", "")
+    analisis  = r.json()
+    tipo_foto = analisis.get("tipo", "PLATO").upper()
+
+    # ── Tabla nutricional detectada ───────────────────────────
+    if tipo_foto == "TABLA_NUTRICIONAL":
+        kcal_porcion    = int(analisis.get("kcal_por_porcion", 0))
+        porcion_g       = analisis.get("porcion_g")
+        porciones_env   = analisis.get("porciones_por_envase")
+        producto        = analisis.get("producto") or "Producto"
+
+        context.user_data["foto_tabla"] = analisis
+
+        porcion_txt = f" ({porcion_g}g)" if porcion_g else ""
+        env_txt     = f"\n📦 Porciones por envase: {porciones_env}" if porciones_env else ""
+
+        await update.message.reply_text(
+            f"🏷️ *Tabla nutricional detectada*\n\n"
+            f"📦 Producto: *{producto}*\n"
+            f"🔥 Calorías por porción{porcion_txt}: *{kcal_porcion} kcal*"
+            f"{env_txt}\n\n"
+            "¿*Cuántas porciones* consumiste? (ej: 1, 0.5, 2)",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        context.user_data["esperando_porciones_tabla"] = True
+        return
+
+    # ── Plato normal ──────────────────────────────────────────
+    kcal      = float(analisis.get("kcal_estimadas", 0))
+    desc      = analisis.get("descripcion", "Plato")
+    confianza = analisis.get("confianza", "MEDIA")
+    detalle   = analisis.get("detalle", "")
 
     context.user_data["foto_analisis"] = analisis
     confianza_emoji = {"ALTA": "🟢", "MEDIA": "🟡", "BAJA": "🔴"}.get(confianza, "🟡")
@@ -730,20 +800,18 @@ async def handle_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def foto_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    token = context.user_data.get("token")
+    token   = context.user_data.get("token")
     analisis = context.user_data.get("foto_analisis", {})
 
     if query.data.startswith("foto_ok"):
         kcal = float(query.data.split(":")[1])
-        payload = {
+        r = await _api("post", "/foto/confirmar", token, json={
             "descripcion": analisis.get("descripcion", "Plato analizado por foto"),
-            "kcal": kcal,
-            "fecha": str(date.today()),
-        }
-        r = await _api("post", "/foto/confirmar", token, json=payload)
-
+            "kcal":        kcal,
+            "fecha":       str(date.today()),
+        })
         if r.status_code == 201:
-            rs = await _api("get", f"/resumen/dia", token)
+            rs = await _api("get", "/resumen/dia", token)
             resumen_txt = _formato_resumen_inline(rs.json()) if rs.status_code == 200 else ""
             await query.edit_message_text(
                 f"✅ Registrado: {kcal:.0f} kcal{resumen_txt}",
@@ -754,18 +822,95 @@ async def foto_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "foto_cancelar":
         await query.edit_message_text("❌ Registro cancelado.")
+        context.user_data.pop("foto_analisis", None)
+        context.user_data.pop("foto_tabla", None)
 
     elif query.data == "foto_editar":
-        await query.edit_message_text(
-            "✏️ Escribe las calorías que quieres registrar (número):"
-        )
+        await query.edit_message_text("✏️ Escribe las calorías que quieres registrar (número):")
         context.user_data["esperando_kcal_foto"] = True
 
 
-# ── Texto libre (agente) ─────────────────────────────────────
+# ── Texto libre (agente LLM) ─────────────────────────────────
 
 async def handle_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Si estamos esperando kcal ajustada de foto
+    """
+    Flujo de texto libre con LLM:
+    1. Clasificar intent (COMIDA / EJERCICIO / CONSULTA / OTRO)
+    2. Si COMIDA → inferir kcal → mostrar preview → pedir confirmación
+    3. Si EJERCICIO → inferir kcal quemadas → mostrar preview → pedir confirmación
+    4. Si CONSULTA → mostrar resumen
+    5. Si OTRO → mensaje genérico
+    """
+    # Esperando número de porciones para tabla nutricional
+    if context.user_data.get("esperando_porciones_tabla"):
+        context.user_data.pop("esperando_porciones_tabla")
+        try:
+            porciones = float(update.message.text.strip().replace(",", "."))
+            assert porciones > 0
+        except (ValueError, AssertionError):
+            await update.message.reply_text("⚠️ Ingresa un número válido (ej: 1, 0.5, 2).")
+            context.user_data["esperando_porciones_tabla"] = True
+            return
+
+        tabla        = context.user_data.get("foto_tabla", {})
+        kcal_porcion = float(tabla.get("kcal_por_porcion", 0))
+        kcal_total   = int(kcal_porcion * porciones)
+        desc         = tabla.get("producto") or "Producto (tabla nutricional)"
+
+        context.user_data["foto_analisis"] = {
+            "descripcion":    desc,
+            "kcal_estimadas": kcal_total,
+            "confianza":      "ALTA",
+            "detalle":        f"{porciones} porción(es) × {int(kcal_porcion)} kcal",
+        }
+
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(f"✅ Confirmar {kcal_total} kcal", callback_data=f"foto_ok:{kcal_total}"),
+                InlineKeyboardButton("✏️ Ajustar", callback_data="foto_editar"),
+            ],
+            [InlineKeyboardButton("❌ Cancelar", callback_data="foto_cancelar")],
+        ])
+
+        await update.message.reply_text(
+            f"🏷️ *{desc}*\n\n"
+            f"📋 {porciones} porción(es) × {int(kcal_porcion)} kcal = *{kcal_total} kcal*\n\n"
+            "¿Confirmas el registro?",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=keyboard,
+        )
+        return
+
+    # Esperando kcal ajustada manualmente tras editar inferencia LLM
+    if context.user_data.get("esperando_kcal_llm"):
+        context.user_data.pop("esperando_kcal_llm")
+        try:
+            kcal = float(update.message.text.strip().replace(",", "."))
+        except ValueError:
+            await update.message.reply_text("⚠️ Ingresa solo un número.")
+            return
+        token = context.user_data.get("token")
+        inf   = context.user_data.get("llm_inferencia", {})
+        tipo  = inf.get("tipo", "comida")
+        if tipo == "ejercicio":
+            r = await _api("post", "/ejercicio", token, json={
+                "descripcion": inf.get("descripcion", "Ejercicio"),
+                "kcal_quemadas": kcal,
+                "fecha": str(date.today()),
+            })
+        else:
+            r = await _api("post", "/calorias", token, json={
+                "descripcion": inf.get("descripcion", "Comida"),
+                "kcal": kcal,
+                "fecha": str(date.today()),
+            })
+        if r.status_code == 201:
+            await update.message.reply_text(f"✅ Registrado: {kcal:.0f} kcal")
+        else:
+            await update.message.reply_text("❌ Error al guardar.")
+        return
+
+    # Esperando kcal ajustada manualmente tras editar foto
     if context.user_data.get("esperando_kcal_foto"):
         context.user_data.pop("esperando_kcal_foto")
         try:
@@ -773,15 +918,13 @@ async def handle_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except ValueError:
             await update.message.reply_text("⚠️ Ingresa solo un número.")
             return
-
         token = context.user_data.get("token")
         analisis = context.user_data.get("foto_analisis", {})
-        payload = {
+        r = await _api("post", "/foto/confirmar", token, json={
             "descripcion": analisis.get("descripcion", "Plato analizado por foto"),
             "kcal": kcal,
             "fecha": str(date.today()),
-        }
-        r = await _api("post", "/foto/confirmar", token, json=payload)
+        })
         if r.status_code == 201:
             await update.message.reply_text(f"✅ Registrado: {kcal:.0f} kcal")
         else:
@@ -793,89 +936,167 @@ async def handle_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     texto = update.message.text.strip()
-    resultado = clasificar(texto)
+    await update.message.reply_text("🤔 Analizando...")
 
-    if resultado.intent == Intent.VER_RESUMEN:
+    # ── Paso 1: clasificar intent ──────────────────────────────
+    try:
+        intent_result = await llm.clasificar_intent(texto)
+    except Exception as e:
+        log.error("Error clasificando intent: %s", e)
+        await update.message.reply_text("❌ Error al procesar. Intenta de nuevo.")
+        return
+
+    # ── Paso 2A: COMIDA ───────────────────────────────────────
+    if intent_result.intent == Intent.COMIDA:
+        try:
+            inf = await llm.inferir_comida(texto)
+        except Exception as e:
+            log.error("Error infiriendo comida: %s", e)
+            await update.message.reply_text("❌ No pude estimar las calorías. Usa /calorias para registrar manualmente.")
+            return
+
+        confianza_emoji = {"ALTA": "🟢", "MEDIA": "🟡", "BAJA": "🔴"}.get(inf.confianza, "🟡")
+        context.user_data["llm_inferencia"] = {
+            "tipo": "comida",
+            "descripcion": inf.descripcion,
+            "kcal": inf.kcal,
+        }
+
+        detalle_txt = f"\n📋 _{inf.detalle}_" if inf.detalle else ""
+        nota_txt    = f"\n💬 _{inf.nota}_" if inf.nota else ""
+
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(f"✅ Confirmar {inf.kcal} kcal", callback_data=f"llm_ok:{inf.kcal}"),
+                InlineKeyboardButton("✏️ Ajustar", callback_data="llm_editar"),
+            ],
+            [InlineKeyboardButton("❌ Cancelar", callback_data="llm_cancelar")],
+        ])
+
+        await update.message.reply_text(
+            f"🍽️ *{inf.descripcion}*\n"
+            f"🔥 Estimado: *{inf.kcal} kcal*\n"
+            f"{confianza_emoji} Confianza: {inf.confianza}"
+            f"{detalle_txt}{nota_txt}\n\n"
+            "¿Confirmas el registro?",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=keyboard,
+        )
+
+    # ── Paso 2B: EJERCICIO ────────────────────────────────────
+    elif intent_result.intent == Intent.EJERCICIO:
+        # Obtener peso y edad del perfil para el cálculo
+        peso_kg, edad = 70.0, 30
+        r_perfil = await _api("get", "/perfil", token)
+        if r_perfil.status_code == 200:
+            p = r_perfil.json()
+            peso_kg = float(p.get("peso_kg", 70))
+            edad    = int(p.get("edad", 30))
+
+        try:
+            inf = await llm.inferir_ejercicio(texto, peso_kg=peso_kg, edad=edad)
+        except Exception as e:
+            log.error("Error infiriendo ejercicio: %s", e)
+            await update.message.reply_text("❌ No pude estimar las calorías quemadas. Usa /ejercicio para registrar manualmente.")
+            return
+
+        confianza_emoji = {"ALTA": "🟢", "MEDIA": "🟡", "BAJA": "🔴"}.get(inf.confianza, "🟡")
+        context.user_data["llm_inferencia"] = {
+            "tipo": "ejercicio",
+            "descripcion": inf.descripcion,
+            "kcal_quemadas": inf.kcal_quemadas,
+            "duracion_min": inf.duracion_min,
+            "distancia_km": inf.distancia_km,
+        }
+
+        dur_txt  = f" · {inf.duracion_min} min" if inf.duracion_min else ""
+        dist_txt = f" · {inf.distancia_km:.1f} km" if inf.distancia_km else ""
+        nota_txt = f"\n💬 _{inf.nota}_" if inf.nota else ""
+
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(f"✅ Confirmar {inf.kcal_quemadas} kcal", callback_data=f"llm_ok:{inf.kcal_quemadas}"),
+                InlineKeyboardButton("✏️ Ajustar", callback_data="llm_editar"),
+            ],
+            [InlineKeyboardButton("❌ Cancelar", callback_data="llm_cancelar")],
+        ])
+
+        await update.message.reply_text(
+            f"🏃 *{inf.descripcion}*{dur_txt}{dist_txt}\n"
+            f"🔥 Estimado: *{inf.kcal_quemadas} kcal quemadas*\n"
+            f"{confianza_emoji} Confianza: {inf.confianza}"
+            f"{nota_txt}\n\n"
+            "¿Confirmas el registro?",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=keyboard,
+        )
+
+    # ── CONSULTA ──────────────────────────────────────────────
+    elif intent_result.intent == Intent.CONSULTA:
         await cmd_resumen(update, context)
 
-    elif resultado.intent == Intent.VER_HISTORIAL:
-        await cmd_historial(update, context)
-
-    elif resultado.intent == Intent.REGISTRAR_CALORIA:
-        # Si detectó kcal en el texto, simplificar el flujo
-        if "kcal" in resultado.parametros:
-            payload = {
-                "descripcion": texto,
-                "kcal": resultado.parametros["kcal"],
-                "fecha": str(date.today()),
-            }
-            r = await _api("post", "/calorias", token, json=payload)
-            if r.status_code == 201:
-                rs = await _api("get", "/resumen/dia", token)
-                resumen_txt = ""
-                if rs.status_code == 200:
-                    s = rs.json()
-                    resumen_txt = f"\n📊 Disponibles: *{float(s.get('kcal_disponibles') or 0):.0f} kcal*\n{s.get('mensaje_orientacion', '')}"
-                await update.message.reply_text(
-                    f"✅ Registrado: {resultado.parametros['kcal']:.0f} kcal{resumen_txt}",
-                    parse_mode=ParseMode.MARKDOWN,
-                )
-            else:
-                await update.message.reply_text("❌ Error al guardar. ¿Tienes perfil? /perfil")
-        else:
-            context.user_data["cal_desc"] = texto
-            await update.message.reply_text(
-                f"🍽️ Entendido: *{texto}*\n¿Cuántas calorías tenía?",
-                parse_mode=ParseMode.MARKDOWN,
-            )
-            context.user_data["_next_handler"] = "caloria_kcal"
-
-    elif resultado.intent == Intent.REGISTRAR_EJERCICIO:
-        if "kcal" in resultado.parametros:
-            payload = {
-                "descripcion": texto,
-                "kcal_quemadas": resultado.parametros["kcal"],
-                "fecha": str(date.today()),
-            }
-            if "duracion_min" in resultado.parametros:
-                payload["duracion_min"] = resultado.parametros["duracion_min"]
-
-            r = await _api("post", "/ejercicio", token, json=payload)
-            if r.status_code == 201:
-                rs = await _api("get", "/resumen/dia", token)
-                resumen_txt = ""
-                if rs.status_code == 200:
-                    s = rs.json()
-                    resumen_txt = f"\n📊 Disponibles: *{float(s.get('kcal_disponibles') or 0):.0f} kcal*"
-                await update.message.reply_text(
-                    f"✅ Ejercicio registrado: {resultado.parametros['kcal']:.0f} kcal quemadas{resumen_txt}",
-                    parse_mode=ParseMode.MARKDOWN,
-                )
-            else:
-                await update.message.reply_text("❌ Error. ¿Tienes perfil? /perfil")
-        else:
-            context.user_data["eje_desc"] = texto
-            await update.message.reply_text(
-                f"🏃 Entendido: *{texto}*\n¿Cuántas calorías quemaste?",
-                parse_mode=ParseMode.MARKDOWN,
-            )
-            context.user_data["_next_handler"] = "ejercicio_kcal"
-
-    elif resultado.intent == Intent.VER_PERFIL:
-        await cmd_perfil(update, context)
-
-    elif resultado.intent == Intent.AYUDA:
-        await cmd_start(update, context)
-
+    # ── OTRO ──────────────────────────────────────────────────
     else:
         await update.message.reply_text(
             "🤔 No entendí bien. Puedes:\n"
-            "• Registrar comida: /calorias\n"
-            "• Registrar ejercicio: /ejercicio\n"
+            "• Escribir lo que comiste: _\"tomé medio pocillo de yogur\"_\n"
+            "• Escribir tu ejercicio: _\"corrí 5km\"_ o _\"pesas 40 min\"_\n"
             "• Ver tu balance: /resumen\n"
             "• Enviarme una foto de tu plato 📸\n"
-            "• Ver tu perfil: /perfil"
+            "• Ver tu perfil: /perfil",
+            parse_mode=ParseMode.MARKDOWN,
         )
+
+
+async def llm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Maneja confirmación/edición/cancelación de inferencias LLM."""
+    query = update.callback_query
+    await query.answer()
+    token = context.user_data.get("token")
+    inf   = context.user_data.get("llm_inferencia", {})
+
+    if query.data.startswith("llm_ok"):
+        kcal = float(query.data.split(":")[1])
+        tipo = inf.get("tipo", "comida")
+
+        if tipo == "ejercicio":
+            payload = {
+                "descripcion":  inf.get("descripcion", "Ejercicio"),
+                "kcal_quemadas": kcal,
+                "fecha":        str(date.today()),
+            }
+            if inf.get("duracion_min"):
+                payload["duracion_min"] = inf["duracion_min"]
+            r = await _api("post", "/ejercicio", token, json=payload)
+        else:
+            payload = {
+                "descripcion": inf.get("descripcion", "Comida"),
+                "kcal":        kcal,
+                "fecha":       str(date.today()),
+            }
+            r = await _api("post", "/calorias", token, json=payload)
+
+        if r.status_code == 201:
+            rs = await _api("get", "/resumen/dia", token)
+            resumen_txt = _formato_resumen_inline(rs.json()) if rs.status_code == 200 else ""
+            await query.edit_message_text(
+                f"✅ Registrado: *{inf.get('descripcion')}* — {kcal:.0f} kcal{resumen_txt}",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        else:
+            await query.edit_message_text("❌ Error al guardar. ¿Tienes perfil registrado? /perfil")
+
+    elif query.data == "llm_cancelar":
+        await query.edit_message_text("❌ Registro cancelado.")
+        context.user_data.pop("llm_inferencia", None)
+
+    elif query.data == "llm_editar":
+        tipo = inf.get("tipo", "comida")
+        if tipo == "ejercicio":
+            await query.edit_message_text("✏️ Escribe las calorías quemadas que quieres registrar:")
+        else:
+            await query.edit_message_text("✏️ Escribe las calorías que quieres registrar:")
+        context.user_data["esperando_kcal_llm"] = True
 
 
 # ── Cancelar conversación ────────────────────────────────────
@@ -979,6 +1200,7 @@ def main():
 
     app.add_handler(MessageHandler(filters.PHOTO, handle_foto))
     app.add_handler(CallbackQueryHandler(foto_callback, pattern="^foto_"))
+    app.add_handler(CallbackQueryHandler(llm_callback, pattern="^llm_"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_texto))
 
     log.info("KALO Bot arrancando con long-polling...")
