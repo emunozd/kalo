@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_serializer, model_validator
 
 
 # ── Auth ─────────────────────────────────────────────────────
@@ -89,7 +89,7 @@ class RegistroCaloriaIn(BaseModel):
 class RegistroCaloriaOut(BaseModel):
     id: UUID
     fecha: date
-    registrado_en: str
+    registrado_en: datetime
     descripcion: str
     kcal: Decimal
     fuente: str
@@ -97,14 +97,10 @@ class RegistroCaloriaOut(BaseModel):
 
     model_config = {"from_attributes": True}
 
-    @model_validator(mode="before")
-    @classmethod
-    def formatear_timestamp(cls, data):
-        if hasattr(data, "__dict__"):
-            ts = getattr(data, "registrado_en", None)
-            if ts and isinstance(ts, datetime):
-                data.__dict__["registrado_en"] = ts.strftime("%Y-%m-%dT%H:%M:%S")
-        return data
+    @field_serializer("registrado_en")
+    def serializar_registrado_en(self, v: datetime) -> str:
+        # Devolver la hora tal como está en BD, sin convertir a UTC
+        return v.strftime("%Y-%m-%dT%H:%M:%S")
 
 
 # ── Foto → Calorías ──────────────────────────────────────────
@@ -137,7 +133,7 @@ class RegistroEjercicioIn(BaseModel):
 class RegistroEjercicioOut(BaseModel):
     id: UUID
     fecha: date
-    registrado_en: str
+    registrado_en: datetime
     descripcion: str
     duracion_min: Optional[int]
     kcal_quemadas: Decimal
@@ -145,14 +141,9 @@ class RegistroEjercicioOut(BaseModel):
 
     model_config = {"from_attributes": True}
 
-    @model_validator(mode="before")
-    @classmethod
-    def formatear_timestamp(cls, data):
-        if hasattr(data, "__dict__"):
-            ts = getattr(data, "registrado_en", None)
-            if ts and isinstance(ts, datetime):
-                data.__dict__["registrado_en"] = ts.strftime("%Y-%m-%dT%H:%M:%S")
-        return data
+    @field_serializer("registrado_en")
+    def serializar_registrado_en(self, v: datetime) -> str:
+        return v.strftime("%Y-%m-%dT%H:%M:%S")
 
 
 # ── Resumen diario ───────────────────────────────────────────
