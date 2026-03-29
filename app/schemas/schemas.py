@@ -113,9 +113,9 @@ class FotoAnalisisOut(BaseModel):
     kcal_estimadas: Decimal
     confianza: str
     detalle: Optional[str]
-    kcal_por_porcion: Optional[Decimal] = None
-    porciones_por_envase: Optional[Decimal] = None
-    porcion_g: Optional[Decimal] = None
+    kcal_por_porcion: Optional[float] = None
+    porciones_por_envase: Optional[float] = None
+    porcion_g: Optional[float] = None
 
 
 class FotoConfirmarIn(BaseModel):
