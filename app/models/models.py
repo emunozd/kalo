@@ -5,19 +5,19 @@ from uuid import UUID, uuid4
 import zoneinfo
 
 from sqlalchemy import (
-    BigInteger, Boolean, CheckConstraint, Date, DateTime,
+    BigInteger, Boolean, CheckConstraint, Date,
     Enum, ForeignKey, Integer, Numeric, String, Text,
     UniqueConstraint, func,
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.database import Base
+from app.core.database import Base, LocalDateTime, TZ_BOGOTA
 
-TZ_BOGOTA = zoneinfo.ZoneInfo("America/Bogota")
 
 def now_bogota() -> datetime:
-    return datetime.now(tz=TZ_BOGOTA).replace(tzinfo=None)  # naive en hora Bogotá
+    """Datetime aware en hora Bogotá — LocalDateTime lo guarda sin conversión."""
+    return datetime.now(tz=TZ_BOGOTA)
 
 
 # ── Enums ────────────────────────────────────────────────────
@@ -43,8 +43,8 @@ class Usuario(Base):
     telegram_id:        Mapped[int | None]    = mapped_column(BigInteger, unique=True)
     telegram_username:  Mapped[str | None]    = mapped_column(String)
     activo:             Mapped[bool]          = mapped_column(Boolean, nullable=False, default=True)
-    creado_en:          Mapped[datetime]      = mapped_column(DateTime(timezone=False), default=now_bogota)
-    actualizado_en:     Mapped[datetime]      = mapped_column(DateTime(timezone=False), default=now_bogota)
+    creado_en:          Mapped[datetime]      = mapped_column(LocalDateTime, default=now_bogota)
+    actualizado_en:     Mapped[datetime]      = mapped_column(LocalDateTime, default=now_bogota)
 
     # Relaciones
     perfil:             Mapped["Perfil | None"]             = relationship(back_populates="usuario", uselist=False, cascade="all, delete-orphan")
@@ -60,9 +60,9 @@ class CodigoOtp(Base):
     id:         Mapped[UUID]     = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     usuario_id: Mapped[UUID]     = mapped_column(PGUUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
     codigo:     Mapped[str]      = mapped_column(String, nullable=False)
-    expira_en:  Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False)
+    expira_en:  Mapped[datetime] = mapped_column(LocalDateTime, nullable=False)
     usado:      Mapped[bool]     = mapped_column(Boolean, nullable=False, default=False)
-    creado_en:  Mapped[datetime] = mapped_column(DateTime(timezone=False), default=now_bogota)
+    creado_en:  Mapped[datetime] = mapped_column(LocalDateTime, default=now_bogota)
 
     usuario: Mapped["Usuario"] = relationship(back_populates="codigos_otp")
 
@@ -79,8 +79,8 @@ class Perfil(Base):
     bmr:                Mapped[Decimal]       = mapped_column(Numeric(8, 2), nullable=False)
     factor_actividad:   Mapped[Decimal]       = mapped_column(Numeric(4, 2), nullable=False, default=Decimal("1.2"))
     objetivo_kcal:      Mapped[Decimal]       = mapped_column(Numeric(8, 2), nullable=False)
-    creado_en:          Mapped[datetime]      = mapped_column(DateTime(timezone=False), default=now_bogota)
-    actualizado_en:     Mapped[datetime]      = mapped_column(DateTime(timezone=False), default=now_bogota)
+    creado_en:          Mapped[datetime]      = mapped_column(LocalDateTime, default=now_bogota)
+    actualizado_en:     Mapped[datetime]      = mapped_column(LocalDateTime, default=now_bogota)
 
     usuario: Mapped["Usuario"] = relationship(back_populates="perfil")
 
@@ -115,7 +115,7 @@ class RegistroCaloria(Base):
     id:           Mapped[UUID]          = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     usuario_id:   Mapped[UUID]          = mapped_column(PGUUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
     fecha:        Mapped[date]          = mapped_column(Date, nullable=False)       # día de consumo
-    registrado_en:Mapped[datetime]      = mapped_column(DateTime(timezone=False), default=now_bogota)  # momento exacto
+    registrado_en:Mapped[datetime]      = mapped_column(LocalDateTime, default=now_bogota)  # momento exacto
     descripcion:  Mapped[str]           = mapped_column(Text, nullable=False)
     kcal:         Mapped[Decimal]       = mapped_column(Numeric(8, 2), nullable=False)
     fuente:       Mapped[FuenteCaloria] = mapped_column(Enum(FuenteCaloria, name="fuente_caloria"), nullable=False, default=FuenteCaloria.MANUAL)
@@ -135,7 +135,7 @@ class RegistroEjercicio(Base):
     id:             Mapped[UUID]     = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     usuario_id:     Mapped[UUID]     = mapped_column(PGUUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
     fecha:          Mapped[date]     = mapped_column(Date, nullable=False)       # día del ejercicio
-    registrado_en:  Mapped[datetime] = mapped_column(DateTime(timezone=False), default=now_bogota)  # momento del registro
+    registrado_en:  Mapped[datetime] = mapped_column(LocalDateTime, default=now_bogota)  # momento del registro
     descripcion:    Mapped[str]      = mapped_column(Text, nullable=False)
     duracion_min:   Mapped[int | None] = mapped_column(Integer)
     kcal_quemadas:  Mapped[Decimal]  = mapped_column(Numeric(8, 2), nullable=False)
@@ -164,8 +164,8 @@ class ResumenDiario(Base):
     kcal_quemadas:      Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False, default=Decimal("0"))
     kcal_objetivo:      Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False, default=Decimal("0"))
     kcal_disponibles:   Mapped[Decimal | None] = mapped_column(Numeric(8, 2))   # GENERATED STORED en PG
-    primera_entrada_en: Mapped[datetime] = mapped_column(DateTime(timezone=False), default=now_bogota)
-    actualizado_en:     Mapped[datetime] = mapped_column(DateTime(timezone=False), default=now_bogota)
+    primera_entrada_en: Mapped[datetime] = mapped_column(LocalDateTime, default=now_bogota)
+    actualizado_en:     Mapped[datetime] = mapped_column(LocalDateTime, default=now_bogota)
 
     usuario: Mapped["Usuario"] = relationship(back_populates="resumenes_diarios")
 
