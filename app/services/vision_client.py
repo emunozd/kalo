@@ -33,6 +33,8 @@ async def analizar_foto_comida(imagen_bytes: bytes, mime_type: str = "image/jpeg
             log.error("LLM Vision error body: %s", resp.text[:1000])
         resp.raise_for_status()
 
+    log.info("LLM Vision response: %s", resp.text[:500])
+
     data = resp.json()
 
     return FotoAnalisisOut(
