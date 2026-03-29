@@ -30,7 +30,7 @@ async def analizar_foto_comida(imagen_bytes: bytes, mime_type: str = "image/jpeg
         resp = await client.post(url, json=payload, headers=headers)
         log.info("LLM Vision status: %s", resp.status_code)
         if resp.status_code != 200:
-            log.error("LLM Vision error body: %s", resp.text[:500])
+            log.error("LLM Vision error body: %s", resp.text[:1000])
         resp.raise_for_status()
 
     data = resp.json()
