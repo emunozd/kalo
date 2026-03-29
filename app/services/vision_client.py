@@ -25,15 +25,19 @@ async def analizar_foto_comida(imagen_bytes: bytes, mime_type: str = "image/jpeg
 
     payload = {"imagen_b64": imagen_b64}
 
-    async with httpx.AsyncClient(timeout=60) as client:
-        url = f"{settings.llm_base_url}/analizar-foto-comida"
-        resp = await client.post(url, json=payload, headers=headers)
-        log.info("LLM Vision status: %s", resp.status_code)
-        if resp.status_code != 200:
-            log.error("LLM Vision error body: %s", resp.text[:1000])
-        resp.raise_for_status()
-
-    log.info("LLM Vision response: %s", resp.text[:500])
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            url = f"{settings.llm_base_url}/analizar-foto-comida"
+            log.info("Llamando a LLM Vision: %s (imagen: %d bytes)", url, len(imagen_bytes))
+            resp = await client.post(url, json=payload, headers=headers)
+            log.info("LLM Vision status: %s", resp.status_code)
+            if resp.status_code != 200:
+                log.error("LLM Vision error body: %s", resp.text[:1000])
+            resp.raise_for_status()
+            log.info("LLM Vision response: %s", resp.text[:500])
+    except Exception as e:
+        log.error("Excepción en LLM Vision: %s: %s", type(e).__name__, e)
+        raise
 
     data = resp.json()
 
