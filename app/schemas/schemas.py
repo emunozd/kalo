@@ -89,13 +89,22 @@ class RegistroCaloriaIn(BaseModel):
 class RegistroCaloriaOut(BaseModel):
     id: UUID
     fecha: date
-    registrado_en: datetime
+    registrado_en: str
     descripcion: str
     kcal: Decimal
     fuente: str
     nota: Optional[str]
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def formatear_timestamp(cls, data):
+        if hasattr(data, "__dict__"):
+            ts = getattr(data, "registrado_en", None)
+            if ts and isinstance(ts, datetime):
+                data.__dict__["registrado_en"] = ts.strftime("%Y-%m-%dT%H:%M:%S")
+        return data
 
 
 # ── Foto → Calorías ──────────────────────────────────────────
@@ -128,13 +137,22 @@ class RegistroEjercicioIn(BaseModel):
 class RegistroEjercicioOut(BaseModel):
     id: UUID
     fecha: date
-    registrado_en: datetime
+    registrado_en: str
     descripcion: str
     duracion_min: Optional[int]
     kcal_quemadas: Decimal
     nota: Optional[str]
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def formatear_timestamp(cls, data):
+        if hasattr(data, "__dict__"):
+            ts = getattr(data, "registrado_en", None)
+            if ts and isinstance(ts, datetime):
+                data.__dict__["registrado_en"] = ts.strftime("%Y-%m-%dT%H:%M:%S")
+        return data
 
 
 # ── Resumen diario ───────────────────────────────────────────
