@@ -691,7 +691,7 @@ async def cmd_historial(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Guardar en contexto para /borrar
     context.user_data["historial"] = registros
 
-    lineas = ["📋 *Últimos registros* (usa /borrar N para eliminar):\n"]
+    lineas = ["📋 *Últimos registros*\nEscribe *borrar N* para eliminar uno:\n"]
     for i, r in enumerate(registros, 1):
         lineas.append(
             f"*{i}.* {r['tipo']} {r['fecha']} {r['hora']} — {r['desc']} · *{r['kcal']:.0f} kcal*"
@@ -1011,7 +1011,10 @@ async def handle_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     texto = update.message.text.strip()
-    # ── Detección local rápida antes de llamar al LLM ────────
+    # Cancelar fuera de conversación activa
+    if _es_cancelar(texto):
+        await update.message.reply_text("✅ No hay ninguna operación activa en este momento.")
+        return
     texto_lower = texto.lower()
 
     # Historial
