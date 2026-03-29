@@ -54,7 +54,14 @@ def _es_cancelar(texto: str) -> bool:
         re.IGNORECASE,
     ))
 
-CANCELAR_FILTER = filters.Regex(
+def _hora_local(registrado_en: str) -> str:
+    """Extrae HH:MM del timestamp sin conversión — la BD ya guarda en hora Bogotá."""
+    try:
+        # Formato: 2026-03-29T13:54:43.363970-05:00 o 2026-03-29 13:54:43.363970-05:00
+        parte = registrado_en.replace("T", " ")
+        return parte[11:16]
+    except Exception:
+        return registrado_en[11:16]
     re.compile(r"^(\/cancelar|cancelar|salir|parar|para|stop|no|nada|olvida|olvídalo|déjalo)$", re.IGNORECASE)
 )
 (
@@ -663,7 +670,7 @@ async def cmd_historial(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "id":   r["id"],
                     "tipo": "🍽️",
                     "fecha": r["fecha"],
-                    "hora": r["registrado_en"][11:16],
+                    "hora": _hora_local(r["registrado_en"]),
                     "desc": r["descripcion"],
                     "kcal": float(r["kcal"]),
                 })
@@ -675,7 +682,7 @@ async def cmd_historial(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "id":   r["id"],
                     "tipo": "🏃",
                     "fecha": r["fecha"],
-                    "hora": r["registrado_en"][11:16],
+                    "hora": _hora_local(r["registrado_en"]),
                     "desc": r["descripcion"],
                     "kcal": float(r["kcal_quemadas"]),
                 })
