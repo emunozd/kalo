@@ -16,8 +16,8 @@ from app.core.database import Base, LocalDateTime, TZ_BOGOTA
 
 
 def now_bogota() -> datetime:
-    """Datetime aware en hora Bogotá — LocalDateTime lo guarda sin conversión."""
-    return datetime.now(tz=TZ_BOGOTA)
+    """Naive datetime en hora Bogotá. asyncpg lo guarda tal cual sin convertir."""
+    return datetime.now(tz=TZ_BOGOTA).replace(tzinfo=None)
 
 
 # ── Enums ────────────────────────────────────────────────────
