@@ -1,12 +1,7 @@
 import random
 import string
 import zoneinfo
-from datetime import datetime, timedelta, timezone
-
-TZ_BOGOTA = zoneinfo.ZoneInfo("America/Bogota")
-
-def _now() -> datetime:
-    return datetime.now(tz=TZ_BOGOTA)
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -19,6 +14,13 @@ from app.schemas.schemas import (
     SolicitarCodigoIn, VerificarCodigoIn,
     VincularTelegramIn, TokenOut,
 )
+from app.services.brevo_client import enviar_codigo_otp
+
+TZ_BOGOTA = zoneinfo.ZoneInfo("America/Bogota")
+
+def _now() -> datetime:
+    """Datetime naive en hora Bogotá — consistente con DateTime(timezone=False) en los modelos."""
+    return datetime.now(tz=TZ_BOGOTA).replace(tzinfo=None)
 from app.services.brevo_client import enviar_codigo_otp
 
 router = APIRouter(prefix="/auth", tags=["auth"])
