@@ -1,7 +1,10 @@
+import logging
 from datetime import date
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+log = logging.getLogger(__name__)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,6 +47,7 @@ async def preview_foto(
     try:
         analisis = await analizar_foto_comida(imagen_bytes, content_type)
     except Exception as e:
+        log.error("Error en analizar_foto_comida: %s: %s", type(e).__name__, e, exc_info=True)
         raise HTTPException(status_code=502, detail=f"Error al analizar la imagen: {str(e)}")
 
     return analisis
