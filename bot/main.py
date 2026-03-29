@@ -46,6 +46,14 @@ LLM_API_KEY    = os.environ.get("LLM_API_KEY", "")
 
 llm = KaloLLMClient(base_url=LLM_BASE_URL, api_key=LLM_API_KEY)
 
+def _es_cancelar(texto: str) -> bool:
+    """Verifica si el texto es una palabra de cancelación."""
+    return bool(re.match(
+        r"^(\/cancelar|cancelar|salir|parar|para|stop|no|nada|olvida|olvídalo|déjalo)$",
+        texto.strip(),
+        re.IGNORECASE,
+    ))
+
 CANCELAR_FILTER = filters.Regex(
     re.compile(r"^(\/cancelar|cancelar|salir|parar|para|stop|no|nada|olvida|olvídalo|déjalo)$", re.IGNORECASE)
 )
@@ -468,12 +476,16 @@ async def cmd_calorias(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def caloria_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if _es_cancelar(update.message.text):
+        return await cancelar(update, context)
     context.user_data["cal_desc"] = update.message.text.strip()
     await update.message.reply_text("🔢 ¿Cuántas calorías tenía aproximadamente? (número entero, ej: 350)")
     return CALORIA_KCAL
 
 
 async def caloria_kcal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if _es_cancelar(update.message.text):
+        return await cancelar(update, context)
     try:
         kcal = float(update.message.text.strip().replace(",", "."))
         assert kcal >= 0
@@ -482,7 +494,7 @@ async def caloria_kcal(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return CALORIA_KCAL
 
     context.user_data["cal_kcal"] = kcal
-    keyboard = [["Hoy", "Ayer"], ["Cancelar"]]
+    keyboard = [["Hoy", "Ayer"]]
     await update.message.reply_text(
         "📅 ¿En qué fecha fue esta comida?",
         reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True),
@@ -491,6 +503,8 @@ async def caloria_kcal(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def caloria_fecha(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if _es_cancelar(update.message.text):
+        return await cancelar(update, context)
     texto = update.message.text.strip().lower()
     if texto == "hoy":
         fecha = str(date.today())
@@ -542,12 +556,16 @@ async def cmd_ejercicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def ejercicio_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if _es_cancelar(update.message.text):
+        return await cancelar(update, context)
     context.user_data["eje_desc"] = update.message.text.strip()
     await update.message.reply_text("⏱️ ¿Cuántos minutos duró? (escribe 0 si no lo sabes)")
     return EJERCICIO_DUR
 
 
 async def ejercicio_dur(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if _es_cancelar(update.message.text):
+        return await cancelar(update, context)
     try:
         dur = int(update.message.text.strip())
     except ValueError:
@@ -560,6 +578,8 @@ async def ejercicio_dur(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def ejercicio_kcal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if _es_cancelar(update.message.text):
+        return await cancelar(update, context)
     try:
         kcal = float(update.message.text.strip().replace(",", "."))
         assert kcal >= 0
@@ -568,7 +588,7 @@ async def ejercicio_kcal(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return EJERCICIO_KCAL
 
     context.user_data["eje_kcal"] = kcal
-    keyboard = [["Hoy", "Ayer"], ["Cancelar"]]
+    keyboard = [["Hoy", "Ayer"]]
     await update.message.reply_text(
         "📅 ¿En qué fecha hiciste el ejercicio?",
         reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True),
@@ -577,6 +597,8 @@ async def ejercicio_kcal(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def ejercicio_fecha(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if _es_cancelar(update.message.text):
+        return await cancelar(update, context)
     texto = update.message.text.strip().lower()
     if texto == "hoy":
         fecha = str(date.today())
@@ -628,24 +650,53 @@ async def cmd_historial(update: Update, context: ContextTypes.DEFAULT_TYPE):
     desde = (date.today() - timedelta(days=6)).isoformat()
     hasta = date.today().isoformat()
 
-    # Obtener resumen de la semana
-    rs = await _api("get", f"/resumen/semana?desde={desde}&hasta={hasta}", token)
-    if rs.status_code != 200 or not rs.json():
+    # Obtener registros individuales de calorías y ejercicio
+    rc = await _api("get", f"/calorias/historial?desde={desde}&hasta={hasta}", token)
+    re_ = await _api("get", f"/ejercicio/historial?desde={desde}&hasta={hasta}", token)
+
+    registros = []
+
+    if rc.status_code == 200:
+        for dia in rc.json():
+            for r in dia.get("registros", []):
+                registros.append({
+                    "id":   r["id"],
+                    "tipo": "🍽️",
+                    "fecha": r["fecha"],
+                    "hora": r["registrado_en"][11:16],
+                    "desc": r["descripcion"],
+                    "kcal": float(r["kcal"]),
+                })
+
+    if re_.status_code == 200:
+        for dia in re_.json():
+            for r in dia.get("registros", []):
+                registros.append({
+                    "id":   r["id"],
+                    "tipo": "🏃",
+                    "fecha": r["fecha"],
+                    "hora": r["registrado_en"][11:16],
+                    "desc": r["descripcion"],
+                    "kcal": float(r["kcal_quemadas"]),
+                })
+
+    if not registros:
         await update.message.reply_text("📭 Sin registros esta semana.")
         return
 
-    lineas = ["📅 *Últimos 7 días:*\n"]
-    for dia in rs.json():
-        consumidas = float(dia["kcal_consumidas"])
-        quemadas   = float(dia["kcal_quemadas"])
-        objetivo   = float(dia["kcal_objetivo"])
-        bal        = objetivo - consumidas + quemadas
-        emoji      = "✅" if bal >= 0 else "⚠️"
+    # Ordenar por fecha+hora descendente y tomar últimos 10
+    registros.sort(key=lambda x: (x["fecha"], x["hora"]), reverse=True)
+    registros = registros[:10]
+
+    # Guardar en contexto para /borrar
+    context.user_data["historial"] = registros
+
+    lineas = ["📋 *Últimos registros* (usa /borrar N para eliminar):\n"]
+    for i, r in enumerate(registros, 1):
         lineas.append(
-            f"{emoji} *{dia['fecha']}* — 🍽️ {consumidas:.0f} | 🏃 {quemadas:.0f} | Disp: {bal:.0f} kcal"
+            f"*{i}.* {r['tipo']} {r['fecha']} {r['hora']} — {r['desc']} · *{r['kcal']:.0f} kcal*"
         )
 
-    context.user_data["ultimo_historial_tipo"] = "resumen_semana"
     await update.message.reply_text("\n".join(lineas), parse_mode=ParseMode.MARKDOWN)
 
 
@@ -659,21 +710,45 @@ async def cmd_borrar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     if not args:
         await update.message.reply_text(
-            "Uso: /borrar <id_registro>\n"
-            "Primero usa /historial para ver los IDs de tus registros."
+            "Uso: /borrar N\n"
+            "Donde N es el número del registro en /historial\n"
+            "Ejemplo: /borrar 3"
         )
         return
 
-    registro_id = args[0]
-    # Intentar primero en calorías, luego en ejercicio
-    r = await _api("delete", f"/calorias/{registro_id}", token)
-    if r.status_code == 404:
+    try:
+        n = int(args[0])
+    except ValueError:
+        await update.message.reply_text("⚠️ Ingresa el número del registro. Ejemplo: /borrar 2")
+        return
+
+    historial = context.user_data.get("historial", [])
+    if not historial:
+        await update.message.reply_text("Primero usa /historial para ver tus registros.")
+        return
+
+    if n < 1 or n > len(historial):
+        await update.message.reply_text(f"⚠️ Número inválido. Elige entre 1 y {len(historial)}.")
+        return
+
+    registro = historial[n - 1]
+    registro_id = registro["id"]
+    tipo = registro["tipo"]
+
+    # Intentar borrar en calorías o ejercicio según tipo
+    if tipo == "🍽️":
+        r = await _api("delete", f"/calorias/{registro_id}", token)
+    else:
         r = await _api("delete", f"/ejercicio/{registro_id}", token)
 
     if r.status_code == 204:
-        await update.message.reply_text("✅ Registro eliminado.")
+        context.user_data["historial"].pop(n - 1)
+        await update.message.reply_text(
+            f"✅ Eliminado: *{registro['desc']}* — {registro['kcal']:.0f} kcal",
+            parse_mode=ParseMode.MARKDOWN,
+        )
     else:
-        await update.message.reply_text("❌ No encontré ese registro.")
+        await update.message.reply_text("❌ No pude eliminar ese registro.")
 
 
 # ── Foto de comida ───────────────────────────────────────────
