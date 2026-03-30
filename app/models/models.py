@@ -98,14 +98,15 @@ class Perfil(Base):
         return anios
 
     def calcular_bmr(self) -> Decimal:
-        """Harris-Benedict revisado usando edad calculada desde fecha_nacimiento."""
+        """Mifflin-St Jeor (más precisa que Harris-Benedict para sobrepeso).
+        Hombre: (10 × kg) + (6.25 × cm) - (5 × edad) + 5
+        Mujer:  (10 × kg) + (6.25 × cm) - (5 × edad) - 161
+        """
         kg  = float(self.peso_kg)
         cm  = float(self.estatura_cm)
         age = float(self.calcular_edad())
-        if self.sexo == SexoTipo.M:
-            bmr = 88.362 + (13.397 * kg) + (4.799 * cm) - (5.677 * age)
-        else:
-            bmr = 447.593 + (9.247 * kg) + (3.098 * cm) - (4.330 * age)
+        base = (10 * kg) + (6.25 * cm) - (5 * age)
+        bmr  = base + 5 if self.sexo == SexoTipo.M else base - 161
         return Decimal(str(round(bmr, 2)))
 
 

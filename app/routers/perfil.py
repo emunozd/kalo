@@ -56,13 +56,15 @@ async def crear_o_actualizar_perfil(
     diferencia   = float(body.peso_kg) - peso_ideal  # positivo = sobrepeso
 
     # Ajuste calórico orientado al peso saludable
-    DEFICIT      = 500   # kcal/día para bajar ~0.5 kg/semana
+    # Déficit de 570 kcal recomendado por nutricionista para bajar ~0.5 kg/semana
+    # Con Mifflin-St Jeor y factor 1.55: ~2570 - 570 = ~2000 kcal objetivo
+    DEFICIT      = 570
     SUPERAVIT    = 300   # kcal/día para subir masa magra
     MARGEN_KG    = 2.0   # rango donde se considera "en peso"
 
     if diferencia > MARGEN_KG:
-        # Sobrepeso — déficit moderado, nunca bajar del BMR
-        objetivo = max(mantenimiento - DEFICIT, float(perfil.bmr))
+        # Sobrepeso — déficit moderado, nunca bajar del BMR + 200 (mínimo seguro)
+        objetivo = max(mantenimiento - DEFICIT, float(perfil.bmr) + 200)
     elif diferencia < -MARGEN_KG:
         # Bajo peso — superávit moderado
         objetivo = mantenimiento + SUPERAVIT
