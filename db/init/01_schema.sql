@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS resumenes_diarios (
     kcal_quemadas       NUMERIC(8,2) NOT NULL DEFAULT 0,
     kcal_objetivo       NUMERIC(8,2) NOT NULL DEFAULT 0,    -- snapshot del objetivo al día
     kcal_disponibles    NUMERIC(8,2)
-        GENERATED ALWAYS AS (kcal_objetivo - kcal_consumidas + kcal_quemadas) STORED,
+        GENERATED ALWAYS AS (kcal_objetivo - kcal_consumidas + (kcal_quemadas * 0.5)) STORED,
     primera_entrada_en  TIMESTAMPTZ  NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Bogota'),
     actualizado_en      TIMESTAMPTZ  NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Bogota'),
 
