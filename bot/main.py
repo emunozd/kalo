@@ -46,6 +46,8 @@ LLM_API_KEY    = os.environ.get("LLM_API_KEY", "")
 
 RECORDATORIO_DIAS = int(os.environ.get("RECORDATORIO_PESO_DIAS", "15"))
 
+llm = KaloLLMClient(base_url=LLM_BASE_URL, api_key=LLM_API_KEY)
+
 def _es_cancelar(texto: str) -> bool:
     """Verifica si el texto es una palabra de cancelación."""
     return bool(re.match(
