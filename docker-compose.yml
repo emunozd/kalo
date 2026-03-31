@@ -82,6 +82,7 @@ services:
       API_BASE_URL: http://kalo-api:8000
       LLM_BASE_URL: ${LLM_BASE_URL}
       LLM_API_KEY: ${LLM_API_KEY:-}
+      RECORDATORIO_PESO_DIAS: ${RECORDATORIO_PESO_DIAS:-15}
       TZ: America/Bogota
     networks:
       - kalo_net

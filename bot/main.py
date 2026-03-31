@@ -44,7 +44,7 @@ TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 LLM_BASE_URL   = os.environ.get("LLM_BASE_URL", "")
 LLM_API_KEY    = os.environ.get("LLM_API_KEY", "")
 
-llm = KaloLLMClient(base_url=LLM_BASE_URL, api_key=LLM_API_KEY)
+RECORDATORIO_DIAS = int(os.environ.get("RECORDATORIO_PESO_DIAS", "15"))
 
 def _es_cancelar(texto: str) -> bool:
     """Verifica si el texto es una palabra de cancelación."""
@@ -1241,6 +1241,66 @@ async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── Entrypoint ───────────────────────────────────────────────
 
+async def job_recordatorio_peso(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Job periódico: revisa usuarios con perfil desactualizado y les manda recordatorio.
+    Corre cada día pero solo notifica cuando han pasado RECORDATORIO_DIAS desde la última actualización.
+    """
+    from datetime import datetime, timedelta
+    import zoneinfo
+    TZ_BOGOTA = zoneinfo.ZoneInfo("America/Bogota")
+
+    async with httpx.AsyncClient(base_url=API_BASE, timeout=10) as c:
+        r = await c.get("/auth/usuarios-activos")
+        if r.status_code != 200:
+            return
+        usuarios = r.json()
+
+    ahora = datetime.now(tz=TZ_BOGOTA)
+    for u in usuarios:
+        telegram_id = u.get("telegram_id")
+        if not telegram_id:
+            continue
+
+        # Obtener token del usuario
+        token = await _get_token(telegram_id)
+        if not token:
+            continue
+
+        # Ver cuándo actualizó el perfil por última vez
+        async with httpx.AsyncClient(base_url=API_BASE, timeout=10) as c:
+            rp = await c.get("/perfil", headers=_auth_headers(token))
+        if rp.status_code != 200:
+            continue
+
+        perfil = rp.json()
+        actualizado_en_str = perfil.get("actualizado_en", "")
+        if not actualizado_en_str:
+            continue
+
+        try:
+            actualizado_en = datetime.fromisoformat(actualizado_en_str.replace("Z", "+00:00"))
+            dias_transcurridos = (ahora - actualizado_en.replace(tzinfo=TZ_BOGOTA if not actualizado_en.tzinfo else actualizado_en.tzinfo)).days
+        except Exception:
+            continue
+
+        if dias_transcurridos >= RECORDATORIO_DIAS:
+            try:
+                await context.bot.send_message(
+                    chat_id=telegram_id,
+                    text=(
+                        f"⚖️ *Recordatorio de peso*\n\n"
+                        f"Han pasado *{dias_transcurridos} días* desde que actualizaste tu perfil.\n\n"
+                        f"Registrar tu peso actual permite que KALO recalcule tu BMR y objetivo calórico con precisión.\n\n"
+                        f"Usa /perfil\\_actualizar para actualizar tu peso. ¡Solo toma un minuto! 💪"
+                    ),
+                    parse_mode=ParseMode.MARKDOWN,
+                )
+                log.info("Recordatorio enviado a telegram_id %s (%d días)", telegram_id, dias_transcurridos)
+            except Exception as e:
+                log.warning("No se pudo enviar recordatorio a %s: %s", telegram_id, e)
+
+
 async def post_init(app: Application) -> None:
     """Registra los comandos en Telegram para que aparezcan en el menú."""
     from telegram import BotCommand
@@ -1256,6 +1316,15 @@ async def post_init(app: Application) -> None:
         BotCommand("desvincular", "Desvincular Telegram"),
         BotCommand("cancelar",    "Cancelar operación en curso"),
     ])
+
+    # Registrar job de recordatorio — corre diariamente a las 9am Bogotá
+    import zoneinfo
+    from datetime import time as dtime
+    app.job_queue.run_daily(
+        job_recordatorio_peso,
+        time=dtime(hour=9, minute=0, tzinfo=zoneinfo.ZoneInfo("America/Bogota")),
+        name="recordatorio_peso",
+    )
 
 
 def main():

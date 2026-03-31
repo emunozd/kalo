@@ -120,7 +120,14 @@ async def desvincular_telegram(
     return {"mensaje": "Telegram desvinculado. Tu historial de datos se conserva."}
 
 
-@router.get("/token-telegram/{telegram_id}", response_model=TokenOut)
+@router.get("/usuarios-activos")
+async def usuarios_activos(db: AsyncSession = Depends(get_db)):
+    """Lista usuarios activos con telegram_id vinculado. Usado por el bot para recordatorios."""
+    result = await db.execute(
+        select(Usuario.telegram_id)
+        .where(Usuario.activo.is_(True), Usuario.telegram_id.isnot(None))
+    )
+    return [{"telegram_id": row[0]} for row in result.all()]
 async def token_por_telegram(telegram_id: int, db: AsyncSession = Depends(get_db)):
     """
     El bot llama a este endpoint para obtener un JWT a partir del telegram_id.
