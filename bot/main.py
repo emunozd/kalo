@@ -84,7 +84,8 @@ CANCELAR_FILTER = filters.Regex(
     EJERCICIO_DUR,
     EJERCICIO_FECHA,
     FOTO_CONFIRMAR,
-) = range(15)
+    ACTUALIZAR_PESO,
+) = range(16)
 
 
 # ── Cliente HTTP helpers ─────────────────────────────────────
@@ -276,6 +277,73 @@ async def cmd_perfil_actualizar(update: Update, context: ContextTypes.DEFAULT_TY
         return
     await update.message.reply_text("¿Cuál es tu *estatura en centímetros*?", parse_mode=ParseMode.MARKDOWN)
     return PERFIL_ESTATURA
+
+
+async def cmd_peso(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Actualiza solo el peso — el único dato que cambia frecuentemente."""
+    token = await _require_token(update, context)
+    if not token:
+        return
+    await update.message.reply_text(
+        "⚖️ ¿Cuál es tu peso actual en kg?\n_(ej: 74.5)_",
+        parse_mode=ParseMode.MARKDOWN,
+    )
+    return ACTUALIZAR_PESO
+
+
+async def actualizar_peso(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if _es_cancelar(update.message.text):
+        return await cancelar(update, context)
+    try:
+        kg = float(update.message.text.strip().replace(",", "."))
+        assert 20 <= kg <= 500
+    except (ValueError, AssertionError):
+        await update.message.reply_text("⚠️ Ingresa un valor válido entre 20 y 500 kg.")
+        return ACTUALIZAR_PESO
+
+    token = context.user_data.get("token")
+
+    # Obtener perfil actual
+    r = await _api("get", "/perfil", token)
+    if r.status_code != 200:
+        await update.message.reply_text("❌ No encontré tu perfil. Usa /perfil para crearlo.")
+        return ConversationHandler.END
+
+    p = r.json()
+
+    # Actualizar solo el peso manteniendo el resto
+    payload = {
+        "estatura_cm":     p["estatura_cm"],
+        "peso_kg":         kg,
+        "sexo":            p["sexo"],
+        "fecha_nacimiento": p["fecha_nacimiento"],
+        "factor_actividad": p["factor_actividad"],
+    }
+    r2 = await _api("post", "/perfil", token, json=payload)
+    if r2.status_code not in (200, 201):
+        await update.message.reply_text("❌ Error al actualizar el peso.")
+        return ConversationHandler.END
+
+    p2 = r2.json()
+    diff = float(p2.get("diferencia_peso_kg", 0))
+    peso_ideal = float(p2.get("peso_saludable_kg", 0))
+
+    if diff < -2:
+        estado = f"⬇️ Estás *{abs(diff):.1f} kg* por encima de tu peso saludable ({peso_ideal:.1f} kg)"
+    elif diff > 2:
+        estado = f"⬆️ Te faltan *{abs(diff):.1f} kg* para tu peso saludable ({peso_ideal:.1f} kg)"
+    else:
+        estado = "✅ ¡Estás en tu peso saludable!"
+
+    await update.message.reply_text(
+        f"✅ *Peso actualizado: {kg} kg*\n\n"
+        f"{estado}\n\n"
+        f"🔥 BMR: *{float(p2['bmr']):.0f} kcal/día*\n"
+        f"🎯 Nuevo objetivo: *{float(p2['objetivo_kcal']):.0f} kcal/día*",
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    return ConversationHandler.END
 
 
 async def perfil_estatura(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1292,9 +1360,9 @@ async def job_recordatorio_peso(context: ContextTypes.DEFAULT_TYPE) -> None:
                     chat_id=telegram_id,
                     text=(
                         f"⚖️ *Recordatorio de peso*\n\n"
-                        f"Han pasado *{dias_transcurridos} días* desde que actualizaste tu perfil.\n\n"
+                        f"Han pasado *{dias_transcurridos} días* desde que actualizaste tu peso.\n\n"
                         f"Registrar tu peso actual permite que KALO recalcule tu BMR y objetivo calórico con precisión.\n\n"
-                        f"Usa /perfil\\_actualizar para actualizar tu peso. ¡Solo toma un minuto! 💪"
+                        f"Usa /peso para actualizarlo. ¡Solo toma un segundo! 💪"
                     ),
                     parse_mode=ParseMode.MARKDOWN,
                 )
@@ -1309,7 +1377,8 @@ async def post_init(app: Application) -> None:
     await app.bot.set_my_commands([
         BotCommand("start",       "Bienvenida y lista de comandos"),
         BotCommand("vincular",    "Vincular cuenta KALO con email"),
-        BotCommand("perfil",      "Ver o actualizar tu BMR"),
+        BotCommand("perfil",      "Ver o actualizar tu perfil completo"),
+        BotCommand("peso",        "Actualizar tu peso actual"),
         BotCommand("calorias",    "Registrar una comida"),
         BotCommand("ejercicio",   "Registrar actividad física"),
         BotCommand("resumen",     "Balance calórico de hoy"),
@@ -1395,6 +1464,19 @@ def main():
     app.add_handler(conv_perfil)
     app.add_handler(conv_caloria)
     app.add_handler(conv_ejercicio)
+
+    # Conversación: actualizar peso
+    conv_peso = ConversationHandler(
+        entry_points=[CommandHandler("peso", cmd_peso)],
+        states={
+            ACTUALIZAR_PESO: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~CANCELAR_FILTER, actualizar_peso)],
+        },
+        fallbacks=[
+            CommandHandler("cancelar", cancelar),
+            MessageHandler(CANCELAR_FILTER, cancelar),
+        ],
+    )
+    app.add_handler(conv_peso)
 
     app.add_handler(CommandHandler("start",       cmd_start))
     app.add_handler(CommandHandler("resumen",     cmd_resumen))
