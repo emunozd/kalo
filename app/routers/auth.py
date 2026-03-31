@@ -128,6 +128,9 @@ async def usuarios_activos(db: AsyncSession = Depends(get_db)):
         .where(Usuario.activo.is_(True), Usuario.telegram_id.isnot(None))
     )
     return [{"telegram_id": row[0]} for row in result.all()]
+
+
+@router.get("/token-telegram/{telegram_id}", response_model=TokenOut)
 async def token_por_telegram(telegram_id: int, db: AsyncSession = Depends(get_db)):
     """
     El bot llama a este endpoint para obtener un JWT a partir del telegram_id.
