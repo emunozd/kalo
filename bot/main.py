@@ -236,6 +236,22 @@ async def cmd_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
         diff = float(p.get("diferencia_peso_kg", 0))
         mantenim = float(p.get("kcal_mantenimiento") or p["objetivo_kcal"])
         objetivo = float(p["objetivo_kcal"])
+        actualizado_en = p.get("actualizado_en", "")
+
+        # Calcular próxima actualización recomendada
+        try:
+            from datetime import datetime, timedelta
+            import zoneinfo
+            TZ_BOGOTA = zoneinfo.ZoneInfo("America/Bogota")
+            fecha_act = datetime.fromisoformat(actualizado_en.replace("Z", "+00:00"))
+            proxima = (fecha_act + timedelta(days=RECORDATORIO_DIAS)).strftime("%d/%m/%Y")
+            dias_restantes = (fecha_act + timedelta(days=RECORDATORIO_DIAS) - datetime.now(tz=TZ_BOGOTA)).days
+            if dias_restantes > 0:
+                prox_txt = f"\n📅 Próxima actualización: *{proxima}* (en {dias_restantes} días)"
+            else:
+                prox_txt = f"\n⚠️ Actualización recomendada: usa /peso para actualizar tu peso"
+        except Exception:
+            prox_txt = ""
 
         if diff < -2:
             # diferencia negativa = peso_ideal - peso_actual < 0 = sobrepeso
@@ -256,8 +272,9 @@ async def cmd_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🏆 Peso saludable: *{float(p['peso_saludable_kg']):.1f} kg* (IMC 22)\n"
             f"{estado_peso}\n\n"
             f"🔥 BMR: *{float(p['bmr']):.0f} kcal/día* (en reposo)\n"
-            f"{meta_txt}\n\n"
-            "¿Deseas actualizar tu perfil? /perfil\_actualizar",
+            f"{meta_txt}"
+            f"{prox_txt}\n\n"
+            "¿Deseas actualizar tu peso? /peso",
             parse_mode=ParseMode.MARKDOWN,
         )
         return
