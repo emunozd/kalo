@@ -900,15 +900,18 @@ async def handle_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_file = await foto.get_file()
     foto_bytes = await tg_file.download_as_bytearray()
 
+    # Caption opcional — solo para PLATO, ayuda al LLM con contexto
+    caption = (update.message.caption or "").strip()
+    # Validar que sea texto útil (entre 3 y 200 chars, no basura)
+    if len(caption) < 3 or len(caption) > 200:
+        caption = ""
+
+    headers_foto = {**_auth_headers(token), "Content-Type": "image/jpeg"}
+    if caption:
+        headers_foto["X-Caption"] = caption
+
     async with httpx.AsyncClient(base_url=API_BASE, timeout=60) as c:
-        r = await c.post(
-            "/foto/preview",
-            content=bytes(foto_bytes),
-            headers={
-                **_auth_headers(token),
-                "Content-Type": "image/jpeg",
-            },
-        )
+        r = await c.post("/foto/preview", content=bytes(foto_bytes), headers=headers_foto)
 
     if r.status_code != 200:
         await update.message.reply_text("❌ No pude analizar la foto. Intenta de nuevo o regístralo manualmente.")

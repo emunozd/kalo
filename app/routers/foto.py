@@ -44,8 +44,10 @@ async def preview_foto(
     if not imagen_bytes:
         raise HTTPException(status_code=400, detail="No se recibió imagen.")
 
+    caption = request.headers.get("x-caption", "").strip() or None
+
     try:
-        analisis = await analizar_foto_comida(imagen_bytes, content_type)
+        analisis = await analizar_foto_comida(imagen_bytes, content_type, caption=caption)
     except Exception as e:
         log.error("Error en analizar_foto_comida: %s: %s", type(e).__name__, e, exc_info=True)
         raise HTTPException(status_code=502, detail=f"Error al analizar la imagen: {str(e)}")

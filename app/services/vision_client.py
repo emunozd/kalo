@@ -12,10 +12,11 @@ from app.schemas.schemas import FotoAnalisisOut
 log = logging.getLogger(__name__)
 
 
-async def analizar_foto_comida(imagen_bytes: bytes, mime_type: str = "image/jpeg") -> FotoAnalisisOut:
+async def analizar_foto_comida(imagen_bytes: bytes, mime_type: str = "image/jpeg", caption: str | None = None) -> FotoAnalisisOut:
     """
     Envía la imagen al endpoint nativo de AIBase /kalo/analizar-foto-comida
     y devuelve el análisis calórico.
+    caption: descripción opcional del usuario que ayuda al LLM a identificar el plato.
     """
     imagen_b64 = base64.b64encode(imagen_bytes).decode("utf-8")
 
@@ -23,7 +24,9 @@ async def analizar_foto_comida(imagen_bytes: bytes, mime_type: str = "image/jpeg
     if settings.llm_api_key:
         headers["Authorization"] = f"Bearer {settings.llm_api_key}"
 
-    payload = {"imagen_b64": imagen_b64}
+    payload: dict = {"imagen_b64": imagen_b64}
+    if caption:
+        payload["caption"] = caption[:200]  # truncar por seguridad
 
     try:
         async with httpx.AsyncClient(timeout=60) as client:
