@@ -907,11 +907,12 @@ async def handle_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         caption = ""
 
     headers_foto = {**_auth_headers(token), "Content-Type": "image/jpeg"}
+    params_foto = {}
     if caption:
-        headers_foto["X-Caption"] = caption
+        params_foto["caption"] = caption
 
     async with httpx.AsyncClient(base_url=API_BASE, timeout=60) as c:
-        r = await c.post("/foto/preview", content=bytes(foto_bytes), headers=headers_foto)
+        r = await c.post("/foto/preview", content=bytes(foto_bytes), headers=headers_foto, params=params_foto)
 
     if r.status_code != 200:
         await update.message.reply_text("❌ No pude analizar la foto. Intenta de nuevo o regístralo manualmente.")

@@ -28,6 +28,7 @@ MAX_SIZE_MB = 10
 async def preview_foto(
     request: Request,
     usuario: Usuario = Depends(get_current_user),
+    caption: str | None = None,
 ):
     """
     Recibe la imagen como body crudo (bytes) y devuelve la estimación calórica.
@@ -44,7 +45,7 @@ async def preview_foto(
     if not imagen_bytes:
         raise HTTPException(status_code=400, detail="No se recibió imagen.")
 
-    caption = request.headers.get("x-caption", "").strip() or None
+    caption = (caption or "").strip() or None
 
     try:
         analisis = await analizar_foto_comida(imagen_bytes, content_type, caption=caption)
