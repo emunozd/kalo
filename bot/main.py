@@ -1013,7 +1013,10 @@ async def foto_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("foto_tabla", None)
 
     elif query.data == "foto_editar":
-        await query.edit_message_text("✏️ Escribe las calorías que quieres registrar (número):")
+        try:
+            await query.edit_message_text("✏️ Escribe las calorías que quieres registrar (número):")
+        except Exception:
+            pass  # Ignorar si el mensaje ya tiene ese contenido
         context.user_data["esperando_kcal_foto"] = True
 
 
@@ -1316,10 +1319,13 @@ async def llm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "llm_editar":
         tipo = inf.get("tipo", "comida")
-        if tipo == "ejercicio":
-            await query.edit_message_text("✏️ Escribe las calorías quemadas que quieres registrar:")
-        else:
-            await query.edit_message_text("✏️ Escribe las calorías que quieres registrar:")
+        try:
+            if tipo == "ejercicio":
+                await query.edit_message_text("✏️ Escribe las calorías quemadas que quieres registrar:")
+            else:
+                await query.edit_message_text("✏️ Escribe las calorías que quieres registrar:")
+        except Exception:
+            pass
         context.user_data["esperando_kcal_llm"] = True
 
 
