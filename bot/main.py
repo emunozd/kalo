@@ -1403,11 +1403,8 @@ async def post_init(app: Application) -> None:
     from telegram import BotCommand
     await app.bot.set_my_commands([
         BotCommand("start",       "Bienvenida y lista de comandos"),
-        BotCommand("vincular",    "Vincular cuenta KALO con email"),
         BotCommand("perfil",      "Ver o actualizar tu perfil completo"),
         BotCommand("peso",        "Actualizar tu peso actual"),
-        BotCommand("calorias",    "Registrar una comida"),
-        BotCommand("ejercicio",   "Registrar actividad física"),
         BotCommand("resumen",     "Balance calórico de hoy"),
         BotCommand("historial",   "Listar últimos 10 registros de comidas y entrenamientos"),
         BotCommand("borrar",      "Eliminar un registro"),
